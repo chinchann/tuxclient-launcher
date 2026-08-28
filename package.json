@@ -1,6 +1,6 @@
 {
   "name": "tuxclient-launcher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Official Desktop Launcher for TuxClient",
   "main": "main.js",
   "scripts": {
