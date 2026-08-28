@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
@@ -13,43 +14,69 @@ let logConsoleWindow = null;
 const launcher = new Client();
 const authManager = new Auth("select_account");
 
-// Configure auto-updater: do not download silently so we can prompt the user via renderer modal
-autoUpdater.autoDownload = false;
+// --- LOGGING & AUTO-UPDATER CONFIGURATION ---
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+autoUpdater.autoDownload = false; // Do not download silently so we can prompt the user via renderer modal
+autoUpdater.autoInstallOnAppQuit = true;
 
 // --- RENDER BACKEND WEBSOCKET URL ---
 const SERVER_WS_URL = "wss://tuxclient-backend.onrender.com";
 const TUX_ROOT = path.join(app.getPath('appData'), '.tuxclient');
 
-// --- AUTO-UPDATER EVENTS (CUSTOM IPC MODAL) ---
+// --- AUTO-UPDATER EVENTS (CUSTOM IPC MODAL & LOGS) ---
+autoUpdater.on('checking-for-update', () => {
+  console.log('[AutoUpdater] Checking for updates...');
+  sendConsoleLog('info', '[AutoUpdater] Checking for available client updates...');
+});
+
 autoUpdater.on('update-available', (info) => {
   console.log('[AutoUpdater] Update available:', info.version);
-  if (mainWindow) {
+  sendConsoleLog('info', `[AutoUpdater] Update available: v${info.version}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-available-prompt', info.version);
   }
+});
+
+autoUpdater.on('update-not-available', () => {
+  console.log('[AutoUpdater] App is up to date.');
+  sendConsoleLog('info', '[AutoUpdater] TuxClient Launcher is fully up to date.');
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
   const percent = Math.floor(progressObj.percent);
   console.log(`[AutoUpdater] Download Progress: ${percent}%`);
-  if (mainWindow) {
+  sendConsoleLog('info', `[AutoUpdater Download] ${percent}% completed`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-progress', percent);
   }
 });
 
-autoUpdater.on('update-downloaded', () => {
+autoUpdater.on('update-downloaded', (info) => {
   console.log('[AutoUpdater] Update downloaded completely.');
-  if (mainWindow) {
+  sendConsoleLog('info', '[AutoUpdater] Update package downloaded successfully. Ready for installation.');
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-ready-prompt');
   }
 });
 
 autoUpdater.on('error', (err) => {
   console.error('[AutoUpdater Error]:', err);
+  sendConsoleLog('error', `[AutoUpdater Error] ${err.message || err}`);
 });
 
 // IPC listeners receiving actions from custom HTML modal buttons
+ipcMain.on('check-for-updates', () => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates();
+  } else {
+    sendConsoleLog('info', '[AutoUpdater] Skipping check (Development Environment detected)');
+  }
+});
+
 ipcMain.on('start-download-update', () => {
   console.log('[AutoUpdater] User accepted update. Starting download...');
+  sendConsoleLog('info', '[AutoUpdater] User accepted update. Starting background download...');
   autoUpdater.downloadUpdate();
 });
 
@@ -298,7 +325,7 @@ function createWindow() {
     console.error("[TuxLauncher Error] Failed to load index.html:", err);
   });
 
-  // Check for updates when the window is shown (only in packaged production builds)
+  // Check for updates automatically in packaged production builds
   mainWindow.once('ready-to-show', () => {
     if (app.isPackaged) {
       autoUpdater.checkForUpdates();
@@ -359,7 +386,7 @@ function connectGlobalChat(username) {
       const packet = JSON.parse(data.toString());
       if (packet.type === 'pong') return;
 
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('network-packet', packet);
       }
     } catch (err) {
@@ -367,7 +394,7 @@ function connectGlobalChat(username) {
     }
   });
 
-  globalChatSocket.on('close', (e) => {
+  globalChatSocket.on('close', () => {
     if (pingInterval) clearInterval(pingInterval);
     setTimeout(() => connectGlobalChat(username), 5000);
   });
@@ -448,7 +475,7 @@ ipcMain.handle('respond-friend-request', async (event, { targetUsername, action,
 });
 
 // --- AUTHENTICATION ---
-ipcMain.on('microsoft-login', async (event) => {
+ipcMain.on('microsoft-login', async () => {
   try {
     const xboxManager = await authManager.launch("raw");
     const token = await xboxManager.getMinecraft();
@@ -459,11 +486,11 @@ ipcMain.on('microsoft-login', async (event) => {
       mclcAuth: token.mclc()
     };
 
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('login-success', accountData);
     }
   } catch (err) {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('login-error', 'Login failed or session expired.');
     }
   }
@@ -553,7 +580,7 @@ ipcMain.on('launch-game', async (event, config) => {
       customArgs: ["-Dorg.lwjgl.util.Debug=true", "-XX:+UnlockExperimentalVMOptions"]
     };
 
-    if (mainWindow) mainWindow.webContents.send('launch-status', `Preparing ${selectedVersion}...`);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', `Preparing ${selectedVersion}...`);
 
     if (selectedLoader.toLowerCase() === 'fabric') {
       sendConsoleLog('info', '[TuxFabric] Resolving Fabric profile...');
@@ -565,7 +592,7 @@ ipcMain.on('launch-game', async (event, config) => {
     launcher.on('data', (e) => {
       const str = e ? e.toString().trim() : '';
       if (str) sendConsoleLog('mc', str);
-      if (mainWindow) mainWindow.webContents.send('launch-status', 'Launching Minecraft...');
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', 'Launching Minecraft...');
     });
 
     launcher.on('debug', (e) => {
@@ -574,7 +601,7 @@ ipcMain.on('launch-game', async (event, config) => {
 
     launcher.on('error', (e) => {
       if (e) sendConsoleLog('error', `[ERROR] ${e}`);
-      if (mainWindow) mainWindow.webContents.send('launch-status', `Error: ${e}`);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', `Error: ${e}`);
     });
 
     let lastPercent = -1;
@@ -584,7 +611,7 @@ ipcMain.on('launch-game', async (event, config) => {
       const percentage = Math.round((e.current / e.total) * 100) || 0;
       const currentType = e.type || "Downloading files...";
 
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('launch-progress', { type: currentType, percent: percentage });
       }
 
@@ -597,13 +624,13 @@ ipcMain.on('launch-game', async (event, config) => {
 
     launcher.on('close', (code) => {
       sendConsoleLog('info', `[TuxLauncher] Process exited with code ${code}`);
-      if (mainWindow) mainWindow.webContents.send('launch-status', code === 0 ? 'Ready' : `Crashed (Exit code: ${code})`);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', code === 0 ? 'Ready' : `Crashed (Exit code: ${code})`);
     });
 
     await launcher.launch(opts);
   } catch (err) {
     sendConsoleLog('error', `[CRASH EXCEPTION] ${err.stack || err.message}`);
-    if (mainWindow) mainWindow.webContents.send('launch-status', `Error: ${err.message}`);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', `Error: ${err.message}`);
   }
 });
 
@@ -688,7 +715,9 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
     downloadedLength += chunk.length;
     if (totalLength) {
       const percent = Math.round((downloadedLength / totalLength) * 100);
-      mainWindow.webContents.send('launch-progress', { type: `Downloading ${fileInfo.filename}...`, percent });
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('launch-progress', { type: `Downloading ${fileInfo.filename}...`, percent });
+      }
     }
   });
 
@@ -696,8 +725,10 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
 
   return new Promise((resolve, reject) => {
     writer.on('finish', () => {
-      mainWindow.webContents.send('launch-progress', { type: 'Download Complete!', percent: 100 });
-      setTimeout(() => mainWindow.webContents.send('launch-status', 'Ready'), 1500);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('launch-progress', { type: 'Download Complete!', percent: 100 });
+        setTimeout(() => mainWindow.webContents.send('launch-status', 'Ready'), 1500);
+      }
       resolve(fileInfo.filename);
     });
     writer.on('error', reject);
