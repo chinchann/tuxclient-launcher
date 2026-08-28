@@ -179,7 +179,7 @@ function sendConsoleLog(type, message) {
   }
 }
 
-// --- RECURSIVE JAVA FINDER AND DOWNLOADER ---
+// --- DYNAMIC VERSION-AWARE JAVA FINDER AND DOWNLOADER ---
 function findJavaExecutable(dir, targetExe = 'java.exe') {
   if (!fs.existsSync(dir)) return null;
   const files = fs.readdirSync(dir);
@@ -196,18 +196,22 @@ function findJavaExecutable(dir, targetExe = 'java.exe') {
   return null;
 }
 
-async function ensurePortableJava(event) {
-  const javaDir = path.join(TUX_ROOT, 'assets', 'java-21');
+async function ensurePortableJava(event, requiredMajorVersion = 21) {
+  const javaDir = path.join(TUX_ROOT, 'assets', `java-${requiredMajorVersion}`);
 
   let javaPath = findJavaExecutable(javaDir, 'java.exe');
   if (javaPath) return javaPath;
 
-  sendConsoleLog('info', '[TuxJava] Downloading Portable JRE 21...');
-  if (mainWindow) mainWindow.webContents.send('launch-status', 'Downloading Java Runtime...');
+  sendConsoleLog('info', `[TuxJava] Downloading Portable JRE ${requiredMajorVersion}...`);
+  if (mainWindow) mainWindow.webContents.send('launch-status', `Downloading Java ${requiredMajorVersion} Runtime...`);
   fs.mkdirSync(javaDir, { recursive: true });
 
-  const zipPath = path.join(javaDir, 'jre21.zip');
-  const javaUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jre_x64_windows_hotspot_21.0.2_13.zip";
+  const zipPath = path.join(javaDir, `jre${requiredMajorVersion}.zip`);
+  
+  // Use JRE 25 link for 26.2+, JRE 21 link for 1.20.x - 1.21.x
+  const javaUrl = requiredMajorVersion >= 25
+    ? "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25%2B36/OpenJDK25U-jre_x64_windows_hotspot_25_36.zip"
+    : "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jre_x64_windows_hotspot_21.0.2_13.zip";
 
   const response = await axios({ url: javaUrl, method: 'GET', responseType: 'stream' });
   const writer = fs.createWriteStream(zipPath);
@@ -218,18 +222,18 @@ async function ensurePortableJava(event) {
     writer.on('error', reject);
   });
 
-  sendConsoleLog('info', '[TuxJava] Extracting Java Runtime files via PowerShell...');
-  if (mainWindow) mainWindow.webContents.send('launch-status', 'Extracting Java Runtime...');
+  sendConsoleLog('info', `[TuxJava] Extracting Java ${requiredMajorVersion} Runtime via PowerShell...`);
+  if (mainWindow) mainWindow.webContents.send('launch-status', `Extracting Java ${requiredMajorVersion}...`);
 
   execSync(`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${javaDir}' -Force"`);
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 
   javaPath = findJavaExecutable(javaDir, 'java.exe');
   if (!javaPath) {
-    throw new Error('Failed to locate java.exe after extraction.');
+    throw new Error(`Failed to locate java.exe after extracting Java ${requiredMajorVersion}.`);
   }
 
-  sendConsoleLog('info', `[TuxJava] Portable Java 21 ready at: ${javaPath}`);
+  sendConsoleLog('info', `[TuxJava] Portable Java ${requiredMajorVersion} ready at: ${javaPath}`);
   return javaPath;
 }
 
@@ -246,7 +250,7 @@ function ensureBundledMods(modsDir, mcVersion) {
         const sourcePath = path.join(sourceBundledDir, file);
         const destPath = path.join(modsDir, file);
 
-        // Inject TuxClient mod strictly when launching Minecraft 1.21.1
+        // Inject tuxclient mod strictly when launching 1.21.1
         if (file.toLowerCase().includes('tuxclient')) {
           if (mcVersion === '1.21.1') {
             try {
@@ -256,21 +260,20 @@ function ensureBundledMods(modsDir, mcVersion) {
               console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
             }
           } else {
-            // Purge TuxClient mod if present in a non-1.21.1 instance to avoid method signature crashes
+            // Remove tuxclient mod if it exists in any other version instance
             if (fs.existsSync(destPath)) {
               try {
                 fs.unlinkSync(destPath);
-                console.log(`[TuxLauncher] Purged incompatible ${file} from ${mcVersion} instance.`);
+                console.log(`[TuxLauncher] Cleaned ${file} from ${mcVersion} instance.`);
               } catch (err) {
                 console.error(`[TuxLauncher Error] Failed to purge ${file}:`, err);
               }
             }
           }
         } else {
-          // Standard bundled utility mods (e.g. Fabric API) inject normally across versions
+          // Standard utility mods (Fabric API, etc.) sync normally
           try {
             fs.copyFileSync(sourcePath, destPath);
-            console.log(`[TuxLauncher] Synced mod: ${file} into ${modsDir}`);
           } catch (err) {
             console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
           }
@@ -297,11 +300,11 @@ function getInstancePath(version = '1.21.1', loader = 'fabric') {
 
 function detectJavaPath() {
   const possiblePaths = [
+    'C:\\Program Files\\Java\\jdk-25\\bin\\java.exe',
     'C:\\Program Files\\Java\\jdk-21\\bin\\java.exe',
     'C:\\Program Files\\Eclipse Adoptium\\jdk-21\\bin\\java.exe',
     'C:\\Program Files\\Microsoft\\jdk-21\\bin\\java.exe',
-    'C:\\Program Files\\Amazon Corretto\\jdk-21\\bin\\java.exe',
-    'C:\\Program Files\\Java\\jdk-17\\bin\\java.exe'
+    'C:\\Program Files\\Amazon Corretto\\jdk-21\\bin\\java.exe'
   ];
   for (const javaPath of possiblePaths) {
     if (fs.existsSync(javaPath)) return javaPath;
@@ -590,14 +593,14 @@ ipcMain.on('launch-game', async (event, config) => {
   sendConsoleLog('info', `[TuxLauncher] Initializing launch routine for Minecraft ${selectedVersion}...`);
 
   try {
-    let javaExecutable = detectJavaPath();
+    // Determine required Java major version based on selected MC version
+    const versionNum = parseFloat(selectedVersion);
+    const requiredJavaVersion = (versionNum >= 25 || selectedVersion.startsWith('26.')) ? 25 : 21;
 
-    if (!javaExecutable) {
-      sendConsoleLog('info', '[TuxJava] No local system Java found. Initiating portable download check...');
-      javaExecutable = await ensurePortableJava(event);
-    } else {
-      sendConsoleLog('info', `[TuxJava] Using local system Java: ${javaExecutable}`);
-    }
+    let javaExecutable = null;
+
+    sendConsoleLog('info', `[TuxJava] Checking for Java ${requiredJavaVersion} Runtime...`);
+    javaExecutable = await ensurePortableJava(event, requiredJavaVersion);
 
     if (!javaExecutable || !fs.existsSync(javaExecutable)) {
       throw new Error(`Java binary not found on filesystem at: ${javaExecutable}`);
