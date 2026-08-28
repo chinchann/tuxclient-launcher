@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
-const path = require('path');
+const path = path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const WebSocket = require('ws');
@@ -13,6 +13,9 @@ let mainWindow;
 let logConsoleWindow = null;
 const launcher = new Client();
 const authManager = new Auth("select_account");
+
+// Tracks current user identity for socket authentication and logout broadcast
+let currentActiveUsername = null;
 
 // --- LOGGING & AUTO-UPDATER CONFIGURATION ---
 autoUpdater.logger = log;
@@ -325,6 +328,30 @@ function createWindow() {
     console.error("[TuxLauncher Error] Failed to load index.html:", err);
   });
 
+  // --- GRACEFUL DISCONNECT HOOK ON LAUNCHER SHUTDOWN ---
+  mainWindow.on('close', (e) => {
+    if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
+      e.preventDefault(); // Pause immediate destruction to allow packet transmission
+
+      console.log(`[TuxLauncher] Transmitting explicit logout frame for user: ${currentActiveUsername}`);
+      
+      try {
+        globalChatSocket.send(JSON.stringify({
+          type: 'logout',
+          username: currentActiveUsername
+        }));
+      } catch (err) {
+        console.error('[TuxLauncher Shutdown Error]:', err.message);
+      }
+
+      setTimeout(() => {
+        try { globalChatSocket.close(); } catch {}
+        globalChatSocket = null;
+        mainWindow.destroy(); // Safely destroy window after broadcast
+      }, 150);
+    }
+  });
+
   // Check for updates automatically in packaged production builds
   mainWindow.once('ready-to-show', () => {
     if (app.isPackaged) {
@@ -354,6 +381,8 @@ let globalChatSocket = null;
 let pingInterval = null;
 
 function connectGlobalChat(username) {
+  currentActiveUsername = username;
+
   if (globalChatSocket) {
     try { globalChatSocket.close(); } catch {}
   }
@@ -396,7 +425,6 @@ function connectGlobalChat(username) {
 
   globalChatSocket.on('close', () => {
     if (pingInterval) clearInterval(pingInterval);
-    setTimeout(() => connectGlobalChat(username), 5000);
   });
 
   globalChatSocket.on('error', (err) => {

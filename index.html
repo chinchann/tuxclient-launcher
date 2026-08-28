@@ -5,6 +5,14 @@
   <title>TuxClient</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/skinview3d@3.3.0/bundles/skinview3d.bundle.js"></script>
+  <style>
+    .status-online {
+      color: #4ADE80 !important;
+    }
+    .status-offline {
+      color: #64748B !important;
+    }
+  </style>
 </head>
 <body>
   <div id="titlebar">
@@ -491,7 +499,7 @@
   }
 
   // RENDER FRIEND CARD IN MY FRIENDS LIST
-  function renderFriendInList(friendUsername) {
+  function renderFriendInList(friendData) {
     const friendsContainer = document.getElementById('friends-list-container');
     if (!friendsContainer) return;
 
@@ -499,9 +507,30 @@
       friendsContainer.innerHTML = '';
     }
 
-    if (document.getElementById(`friend-card-${friendUsername.toLowerCase()}`)) return;
+    const friendUsername = typeof friendData === 'string' ? friendData : friendData.username;
+    const status = typeof friendData === 'string' ? 'online' : (friendData.status || 'offline');
+    const isOnline = status === 'online';
 
-    const friendCard = document.createElement('div');
+    let friendCard = document.getElementById(`friend-card-${friendUsername.toLowerCase()}`);
+    
+    if (friendCard) {
+      // Update existing card status dynamically
+      const statusText = friendCard.querySelector('.friend-status-text');
+      const callBtn = friendCard.querySelector('.call-btn-action');
+      if (statusText) {
+        statusText.innerText = isOnline ? 'Online' : 'Offline';
+        statusText.className = `subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}`;
+      }
+      if (callBtn) {
+        callBtn.disabled = !isOnline;
+        callBtn.style.opacity = isOnline ? '1' : '0.4';
+        callBtn.style.cursor = isOnline ? 'pointer' : 'not-allowed';
+      }
+      return;
+    }
+
+    // Create new friend card
+    friendCard = document.createElement('div');
     friendCard.id = `friend-card-${friendUsername.toLowerCase()}`;
     friendCard.className = 'setting-row';
     friendCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
@@ -510,11 +539,11 @@
         <img src="https://mc-heads.net/avatar/${friendUsername}/32" width="32" height="32" style="border-radius: 4px;">
         <div class="setting-info">
           <label><strong>${friendUsername}</strong></label>
-          <span class="subtext" style="color: #4ADE80;">Online</span>
+          <span class="subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</span>
         </div>
       </div>
       <div>
-        <button class="secondary-btn" style="background: #a855f7; color: white; margin-right: 6px; display: inline-flex; align-items: center; gap: 6px;" onclick="startVoiceCall('${friendUsername}')">
+        <button class="secondary-btn call-btn-action" style="background: #a855f7; color: white; margin-right: 6px; display: inline-flex; align-items: center; gap: 6px; ${!isOnline ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${!isOnline ? 'disabled' : ''} onclick="startVoiceCall('${friendUsername}')">
           <img src="assets/calling.png" width="14" height="14" alt="Call"> Call
         </button>
         <button class="secondary-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
@@ -535,8 +564,6 @@
 
   window.startVoiceCall = async (targetUsername) => {
     currentCallTarget = targetUsername;
-    
-    // CALLER UI MODE: SHOW "CALLING..." & HIDE ACCEPT BUTTON
     showCallModal(targetUsername, "Calling...", true);
 
     try {
@@ -757,6 +784,11 @@
       }
     }
 
+    // Dynamic Friend Online/Offline Status Changes
+    if (packet.type === 'user_status_change') {
+      renderFriendInList({ username: packet.username, status: packet.status });
+    }
+
     // Friend Requests
     if (packet.type === 'friend_request') {
       const requestsList = document.getElementById('friend-requests-list');
@@ -785,7 +817,7 @@
 
     if (packet.type === 'friend_accept') {
       alert(`${packet.from} accepted your friend request!`);
-      renderFriendInList(packet.from);
+      renderFriendInList({ username: packet.from, status: 'online' });
     }
 
     if (packet.type === 'global_chat') {
@@ -826,7 +858,6 @@
     if (packet.type === 'call_offer') {
       currentCallTarget = packet.from;
       incomingOffer = packet;
-      // RECIPIENT UI MODE: SHOW ACCEPT & DECLINE BUTTONS
       showCallModal(packet.from, "Incoming Voice Call...", false);
     }
 
@@ -884,7 +915,7 @@
       if (card) card.remove();
 
       if (action === 'accept') {
-        renderFriendInList(targetUsername);
+        renderFriendInList({ username: targetUsername, status: 'online' });
       }
     }
   };
@@ -1145,9 +1176,10 @@
   window.addEventListener('DOMContentLoaded', () => {
     initializeVersions();
     updateAccountUI();
+    setupSkinControls();
   });
 
-  // --- 5. 3D SKIN VIEWER ---
+  // --- 5. 3D SKIN VIEWER & ANIMATION CONTROLS ---
   let skinViewer = null;
 
   function initSkinViewer() {
@@ -1163,14 +1195,76 @@
           skin: "https://crafatar.com/skins/Steve"
         });
 
-        skinViewer.autoRotate = true;
+        const autoRotateCheckbox = document.getElementById('toggle-auto-rotate');
+        skinViewer.autoRotate = autoRotateCheckbox ? autoRotateCheckbox.checked : true;
         skinview3d.createOrbitControls(skinViewer);
-        skinViewer.animation = new skinview3d.WalkingAnimation();
+
+        updateSkinAnimation();
       } catch (e) {
         console.error("Failed to initialize skinViewer:", e);
       }
     }
     return skinViewer;
+  }
+
+  function updateSkinAnimation() {
+    if (!skinViewer) return;
+    const animSelect = document.getElementById('skin-animation-select');
+    const selectedAnim = animSelect ? animSelect.value : 'walk';
+
+    switch (selectedAnim) {
+      case 'walk':
+        skinViewer.animation = new skinview3d.WalkingAnimation();
+        break;
+      case 'run':
+        skinViewer.animation = new skinview3d.RunningAnimation();
+        break;
+      case 'fly':
+        skinViewer.animation = new skinview3d.FlyingAnimation();
+        break;
+      case 'idle':
+      default:
+        skinViewer.animation = null;
+        break;
+    }
+  }
+
+  function setupSkinControls() {
+    const animSelect = document.getElementById('skin-animation-select');
+    const autoRotateToggle = document.getElementById('toggle-auto-rotate');
+    const fetchSkinBtn = document.getElementById('fetch-skin-btn');
+    const fileInput = document.getElementById('skin-file-input');
+
+    if (animSelect) {
+      animSelect.addEventListener('change', updateSkinAnimation);
+    }
+
+    if (autoRotateToggle) {
+      autoRotateToggle.addEventListener('change', (e) => {
+        if (skinViewer) skinViewer.autoRotate = e.target.checked;
+      });
+    }
+
+    if (fetchSkinBtn) {
+      fetchSkinBtn.addEventListener('click', () => {
+        const username = document.getElementById('skin-username-input')?.value;
+        loadSkinByUsername(username);
+      });
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && skinViewer) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            skinViewer.loadSkin(event.target.result);
+            document.getElementById('skin-upload-status').innerText = 'Skin loaded!';
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
   }
 
   async function loadSkinByUsername(username) {
