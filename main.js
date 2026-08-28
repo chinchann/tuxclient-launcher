@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
-const path = path = require('path');
+const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const WebSocket = require('ws');
