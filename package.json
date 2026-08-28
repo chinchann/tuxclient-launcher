@@ -1,0 +1,57 @@
+{
+  "name": "tuxclient-launcher",
+  "version": "1.0.0",
+  "description": "Official Desktop Launcher for TuxClient",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "publish": "electron-builder --win --publish always"
+  },
+  "build": {
+    "appId": "com.tuxclient.launcher",
+    "productName": "TuxClient Launcher",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "chinchann",
+        "repo": "tuxclient-launcher"
+      }
+    ],
+    "files": [
+      "**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/",
+        "to": "assets/"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "uninstallDisplayName": "TuxClient Launcher"
+    }
+  },
+  "dependencies": {
+    "axios": "^1.20.0",
+    "electron-updater": "^6.8.9",
+    "express": "^4.19.2",
+    "minecraft-launcher-core": "^3.18.2",
+    "msmc": "^5.0.5",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^28.2.1",
+    "electron-builder": "^24.13.3"
+  }
+}

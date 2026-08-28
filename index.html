@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TuxClient</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/skinview3d@3.3.0/bundles/skinview3d.bundle.js"></script>
+</head>
+<body>
+  <div id="titlebar">
+    <div class="titlebar-brand">
+      <img src="assets/logo.png" class="launcher-logo" alt="Logo">
+      <span class="brand-text">TUXCLIENT</span>
+    </div>
+    <div class="window-controls">
+      <button id="win-min">−</button>
+      <button id="win-max">
+        <img src="assets/maximize.png" alt="Maximize" class="control-icon">
+      </button>
+      <button id="win-close" class="close-btn">✕</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <aside class="sidebar">
+      <div class="nav-section">
+        <span class="nav-label">NAVIGATION</span>
+        <button class="nav-btn active" id="tab-play-btn">Play</button>
+        <button class="nav-btn" id="tab-profiles-btn">Profiles</button>
+        <button class="nav-btn" id="tab-mods-btn">Mods</button>
+        <button class="nav-btn" id="tab-packs-btn">Resource Packs</button>
+        <button class="nav-btn" id="tab-shaders-btn">Shaders</button>
+        <button class="nav-btn" id="tab-skins-btn">Skins</button>
+        <button class="nav-btn" id="tab-friends-btn">Social & Friends</button>
+        <button class="nav-btn" id="tab-settings-btn">Settings</button>
+      </div>
+
+      <div class="nav-section" style="margin-top: auto;">
+        <button class="nav-btn" id="toggle-chat-btn">Toggle Global Chat</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div id="view-profiles" class="view-section hidden">
+        <div class="view-header">
+          <h2>Account Profiles</h2>
+          <p>Manage your logged-in Minecraft accounts and switch between them.</p>
+        </div>
+
+        <div class="settings-container">
+          <div class="settings-card">
+            <h3>Active Account</h3>
+            <div id="active-account-display" class="setting-row">
+              <div class="profile-info" style="display: flex; align-items: center; gap: 12px;">
+                <img id="active-profile-avatar" src="https://mc-heads.net/avatar/MSTEVE/32" width="32" height="32" alt="Avatar" style="border-radius: 4px;">
+                <div class="setting-info">
+                  <label id="active-profile-name">Not Signed In</label>
+                  <span class="subtext" id="active-profile-uuid">No active session</span>
+                </div>
+              </div>
+              <button id="signout-btn" class="secondary-btn close-btn-style hidden">Sign Out</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+              <h3 style="border: none; margin: 0; padding: 0;">Saved Accounts</h3>
+              <button id="add-account-btn" class="download-btn">Add Account</button>
+            </div>
+            
+            <div id="accounts-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <p class="subtext">No accounts saved yet. Click "Add Account" to sign in with Microsoft.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="friends-view" class="tab-view hidden">
+        <div class="view-header">
+          <h2>Social & Friends</h2>
+          <p>Connect with friends, accept incoming requests, launch direct chats, and make voice calls.</p>
+        </div>
+
+        <div class="settings-container">
+          <div class="settings-card">
+            <h3>Add Friend</h3>
+            <div class="mod-search-bar" style="margin-bottom: 0; margin-top: 10px;">
+              <input type="text" id="add-friend-input" placeholder="Enter launcher username...">
+              <button id="send-friend-request-btn" onclick="sendFriendRequest()">Send Request</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Pending Friend Requests</h3>
+            <div id="friend-requests-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+              <p class="subtext">No pending requests.</p>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>My Friends</h3>
+            <div id="friends-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+              <p class="subtext">You haven't added any friends yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings-view" class="tab-view hidden">
+        <div class="view-header">
+          <h2>Launcher Settings</h2>
+          <p>Customize your game performance, launcher behavior, and system startup options.</p>
+        </div>
+
+        <div class="settings-container">
+          <div class="settings-card">
+            <h3>⚡ Game Performance</h3>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label>RAM Allocation</label>
+                <span class="subtext">Control max memory allocated to Minecraft</span>
+              </div>
+              <div class="ram-control">
+                <input type="range" id="ram-slider" min="2" max="16" step="1" value="4">
+                <span id="ram-display" class="badge">4 GB</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>⚙️ General & Startup</h3>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label>Open App on Startup</label>
+                <span class="subtext">Automatically launch TuxClient when you log into Windows</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="autostart-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>📁 Storage & Files</h3>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label>Game Directory</label>
+                <span class="subtext">Open local folder containing mods, saves, and screenshots</span>
+              </div>
+              <button class="secondary-btn" id="open-folder-btn">📂 Open Folder</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="play-view" class="tab-view">
+        <div class="hero-banner">
+          <div class="hero-content">
+            <div class="hero-badge">LATEST UPDATE</div>
+            <h2>MINECRAFT: VOID UPDATE</h2>
+            <p>Enhanced client optimization, high-FPS overlays, and direct mod downloading now active.</p>
+          </div>
+        </div>
+
+        <div class="launch-control-card">
+          <div class="launch-options-grid">
+            <div class="option-group">
+              <div class="option-label-row">
+                <label>VERSION</label>
+                <div class="version-filters">
+                  <label><input type="checkbox" id="show-snapshots"> Snapshots</label>
+                  <label><input type="checkbox" id="show-historical"> Alpha/Beta</label>
+                </div>
+              </div>
+              <select id="version-select">
+                <option value="">Loading versions...</option>
+              </select>
+            </div>
+
+            <div class="option-group">
+              <label style="margin-bottom: 6px; display: block;">MOD LOADER</label>
+              <select id="loader-select">
+                <option value="vanilla">Vanilla</option>
+                <option value="fabric" selected>Fabric</option>
+                <option value="quilt">Quilt</option>
+                <option value="forge">Forge</option>
+                <option value="neoforge">NeoForge</option>
+              </select>
+            </div>
+          </div>
+          
+          <button id="play-btn" disabled>Launch Game</button>
+        </div>
+      </div>
+
+      <div id="mods-view" class="tab-view hidden">
+        <div class="view-header">
+          <h2>Mod Manager</h2>
+          <p>Browse Modrinth and manage your local client modifications.</p>
+        </div>
+
+        <div class="mod-search-bar">
+          <input type="text" id="mod-search-input" placeholder="Search mods (Sodium, Iris, Mod Menu)..." onkeyup="if(event.key === 'Enter') searchModrinth()">
+          <button id="mod-search-btn" onclick="searchModrinth()">Search</button>
+        </div>
+
+        <div class="mods-section">
+          <h3>Installed Mods</h3>
+          <div id="installed-mods-list" class="mod-grid"></div>
+        </div>
+
+        <div class="mods-section">
+          <h3>Browse Modrinth</h3>
+          <div id="modrinth-search-list" class="mod-grid"></div>
+        </div>
+      </div>
+
+      <div id="packs-view" class="tab-view hidden">
+        <div class="view-header">
+          <h2>Resource Packs</h2>
+          <p>Automate your visual experience with custom resource packs from Modrinth.</p>
+        </div>
+
+        <div class="mod-search-bar">
+          <input type="text" id="pack-search-input" placeholder="Search resource packs..." onkeyup="if(event.key === 'Enter') searchPacksModrinth()">
+          <button id="pack-search-btn" onclick="searchPacksModrinth()">Search</button>
+        </div>
+
+        <div class="mods-section">
+          <h3>Installed Resource Packs</h3>
+          <div id="installed-packs-list" class="mod-grid"></div>
+        </div>
+
+        <div class="mods-section">
+          <h3>Browse Modrinth</h3>
+          <div id="pack-modrinth-list" class="mod-grid"></div>
+        </div>
+      </div>
+
+      <div id="shaders-view" class="tab-view hidden">
+        <div class="view-header">
+          <h2>Shader Packs</h2>
+          <p>Manage and discover Iris shader integration for enhanced graphical immersion.</p>
+        </div>
+
+        <div class="mod-search-bar">
+          <input type="text" id="shader-search-input" placeholder="Search shaders..." onkeyup="if(event.key === 'Enter') searchShadersModrinth()">
+          <button id="shader-search-btn" onclick="searchShadersModrinth()">Search</button>
+        </div>
+
+        <div class="mods-section">
+          <h3>Installed Shader Packs</h3>
+          <div id="installed-shaders-list" class="mod-grid"></div>
+        </div>
+
+        <div class="mods-section">
+          <h3>Browse Modrinth</h3>
+          <div id="shader-modrinth-list" class="mod-grid"></div>
+        </div>
+      </div>
+
+      <div id="skins-view" class="tab-view hidden">
+        <div class="view-header">
+          <h2>3D Skin Studio</h2>
+          <p>Preview your skin, load custom textures, and test animations.</p>
+        </div>
+
+        <div class="skin-studio-container">
+          <div class="skin-viewport-card">
+            <canvas id="skin_container"></canvas>
+          </div>
+
+          <div class="skin-controls-card">
+            <h3>Skin Options</h3>
+
+            <div class="control-group">
+              <label>Fetch Skin by Username</label>
+              <div class="input-inline">
+                <input type="text" id="skin-username-input" placeholder="e.g. Steve">
+                <button id="fetch-skin-btn">Load</button>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label>Upload Custom Skin (.png)</label>
+              <input type="file" id="skin-file-input" accept="image/png" style="display: none;">
+              <div class="upload-row" style="display: flex; align-items: center; gap: 10px; margin-top: 6px;">
+                <button class="secondary-btn" onclick="document.getElementById('skin-file-input').click()">📁 Choose PNG File</button>
+                <div id="skin-upload-spinner" class="spinner hidden"></div>
+                <span id="skin-upload-status" style="font-size: 12px; font-weight: 600;"></span>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label>Animation</label>
+              <select id="skin-animation-select">
+                <option value="idle">Idle / Stationary</option>
+                <option value="walk" selected>Walking</option>
+                <option value="run">Running</option>
+                <option value="fly">Flying</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="toggle-auto-rotate" checked>
+                <span>Auto Rotate Camera</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="chat-panel" class="chat-panel hidden">
+      <div class="chat-header">
+        <h3 id="chat-panel-title">Global Chat</h3>
+        <button id="close-chat-btn" class="secondary-btn close-btn-style" style="padding: 4px 8px; font-size: 10px;">✕</button>
+      </div>
+      <div class="chat-messages" id="chat-messages-container">
+        <div class="chat-msg system"><span>Welcome to TuxClient chat!</span></div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Type a message..." onkeyup="if(event.key === 'Enter') sendChatMessage()">
+        <button onclick="sendChatMessage()">Send</button>
+      </div>
+    </div>
+
+    <div id="private-chat-panel" class="chat-panel hidden">
+      <div class="chat-header">
+        <h3 id="private-chat-title">Direct Chat</h3>
+        <button id="close-private-chat-btn" class="secondary-btn close-btn-style" style="padding: 4px 8px; font-size: 10px;">✕</button>
+      </div>
+      <div class="chat-messages" id="private-chat-messages-container">
+        <div class="chat-msg system"><span>Direct chat session initialized.</span></div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="private-chat-input" placeholder="Type private message..." onkeyup="if(event.key === 'Enter') sendPrivateChatMessage()">
+        <button onclick="sendPrivateChatMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="call-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <img id="call-user-avatar" src="https://mc-heads.net/avatar/MSTEVE/64" width="64" height="64" style="border-radius: 8px; margin-bottom: 12px; border: 2px solid #a855f7;">
+    <h2 id="call-user-name" style="margin: 0; color: #fff; font-size: 20px;">Caller Name</h2>
+    <p id="call-status-text" style="color: #9CA3AF; margin: 8px 0 24px 0; font-size: 14px;">Incoming Voice Call...</p>
+    
+    <div style="display: flex; gap: 16px;">
+      <button id="accept-call-btn" class="download-btn" style="background: #a855f7; color: white; padding: 10px 24px; font-weight: bold; display: inline-flex; align-items: center; gap: 8px;">
+        <img src="assets/calling.png" width="16" height="16" alt="Call"> Accept
+      </button>
+      <button id="reject-call-btn" class="secondary-btn close-btn-style" style="background: #EF4444; color: white; padding: 10px 24px; font-weight: bold;">🚫 Decline</button>
+    </div>
+  </div>
+
+  <div id="update-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div style="background: #14141F; border: 1px solid #1E1E2A; border-radius: 12px; padding: 28px; width: 420px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div style="background: rgba(168, 85, 247, 0.1); color: #a855f7; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px;">SYSTEM UPDATE</div>
+      <h2 id="update-title" style="margin: 0 0 8px 0; color: #fff; font-size: 20px;">Update Available!</h2>
+      <p id="update-message" style="color: #9CA3AF; margin: 0 0 20px 0; font-size: 13px; line-height: 1.5;">A new version of TuxClient is ready to install.</p>
+
+      <div id="update-progress-box" class="hidden" style="margin-bottom: 20px;">
+        <div style="background: #1E1E2A; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+          <div id="update-progress-fill" style="background: #a855f7; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+        </div>
+        <span id="update-progress-text" style="color: #9CA3AF; font-size: 12px;">Downloading: 0%</span>
+      </div>
+
+      <div id="update-modal-actions" style="display: flex; gap: 12px; justify-content: center;">
+        <button id="update-now-btn" class="download-btn" style="background: #a855f7; color: white; padding: 10px 20px; font-weight: bold;">Update Now</button>
+        <button id="update-later-btn" class="secondary-btn" onclick="document.getElementById('update-modal').classList.add('hidden')">Later</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="remote-audio" autoplay></audio>
+
+  <footer class="status-bar">
+    <div id="user-card">
+      <button id="login-btn">Sign In with Microsoft</button>
+    </div>
+
+    <div class="footer-status-group">
+      <div id="progress-container" class="footer-progress-wrapper hidden">
+        <div class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="progress-info">
+          <span id="progress-percentage">0%</span>
+          <span id="progress-status">Downloading...</span>
+        </div>
+      </div>
+
+      <div id="status-text">Status: Ready</div>
+    </div>
+  </footer>
+
+  <script>
+  const { ipcRenderer } = require('electron');
+
+  // --- 1. ESSENTIAL WINDOW CONTROLS ---
+  document.getElementById('win-min')?.addEventListener('click', () => ipcRenderer.send('window-minimize'));
+  document.getElementById('win-max')?.addEventListener('click', () => ipcRenderer.send('window-maximize'));
+  document.getElementById('win-close')?.addEventListener('click', () => ipcRenderer.send('window-close'));
+
+  // --- 2. TAB NAVIGATION CONTROLS ---
+  const tabs = [
+    { btn: document.getElementById('tab-play-btn'), view: document.getElementById('play-view') },
+    { btn: document.getElementById('tab-profiles-btn'), view: document.getElementById('view-profiles') },
+    { btn: document.getElementById('tab-mods-btn'), view: document.getElementById('mods-view') },
+    { btn: document.getElementById('tab-packs-btn'), view: document.getElementById('packs-view') },
+    { btn: document.getElementById('tab-shaders-btn'), view: document.getElementById('shaders-view') },
+    { btn: document.getElementById('tab-skins-btn'), view: document.getElementById('skins-view') },
+    { btn: document.getElementById('tab-friends-btn'), view: document.getElementById('friends-view') },
+    { btn: document.getElementById('tab-settings-btn'), view: document.getElementById('settings-view') }
+  ];
+
+  tabs.forEach(tab => {
+    if (!tab.btn) return;
+    tab.btn.addEventListener('click', () => {
+      tabs.forEach(t => {
+        if (t.btn) t.btn.classList.remove('active');
+        if (t.view) t.view.classList.add('hidden');
+      });
+      tab.btn.classList.add('active');
+      if (tab.view) tab.view.classList.remove('hidden');
+
+      if (tab.btn.id === 'tab-mods-btn') {
+        loadInstalledMods();
+        searchModrinth();
+      }
+      if (tab.btn.id === 'tab-packs-btn') {
+        loadInstalledPacks('resourcepacks');
+        searchPacksModrinth();
+      }
+      if (tab.btn.id === 'tab-shaders-btn') {
+        loadInstalledPacks('shaders');
+        searchShadersModrinth();
+      }
+      if (tab.btn.id === 'tab-skins-btn') {
+        setTimeout(() => {
+          initSkinViewer();
+          const targetUser = (activeAccount && activeAccount.name) ? activeAccount.name : 'Steve';
+          loadSkinByUsername(targetUser);
+        }, 80);
+      }
+      if (tab.btn.id === 'tab-settings-btn') initSettings();
+    });
+  });
+
+  // --- CHAT & SOCIAL NETWORK CONTROLS ---
+  const chatPanel = document.getElementById('chat-panel');
+  const toggleChatBtn = document.getElementById('toggle-chat-btn');
+  const closeChatBtn = document.getElementById('close-chat-btn');
+
+  const privateChatPanel = document.getElementById('private-chat-panel');
+  const closePrivateChatBtn = document.getElementById('close-private-chat-btn');
+  let currentActivePrivateFriend = null;
+
+  toggleChatBtn?.addEventListener('click', () => {
+    privateChatPanel?.classList.add('hidden');
+    chatPanel.classList.toggle('hidden');
+  });
+  closeChatBtn?.addEventListener('click', () => chatPanel.classList.add('hidden'));
+  closePrivateChatBtn?.addEventListener('click', () => privateChatPanel.classList.add('hidden'));
+
+  window.openDirectChat = (friendUsername) => {
+    currentActivePrivateFriend = friendUsername;
+    chatPanel?.classList.add('hidden');
+    
+    const titleEl = document.getElementById('private-chat-title');
+    if (titleEl) titleEl.innerText = `Chat with ${friendUsername}`;
+
+    const container = document.getElementById('private-chat-messages-container');
+    if (container) {
+      container.innerHTML = `<div class="chat-msg system"><span>Private session with ${friendUsername}</span></div>`;
+    }
+
+    privateChatPanel?.classList.remove('hidden');
+  };
+
+  async function initBackendNetwork() {
+    const activeUser = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    console.log(`[UI] Initializing WebSocket backend connection as: ${activeUser}`);
+    const res = await ipcRenderer.invoke('init-global-chat', activeUser);
+    if (res.success) {
+      console.log(`[UI] Connected to Render WebSocket backend as ${activeUser}`);
+    }
+  }
+
+  // RENDER FRIEND CARD IN MY FRIENDS LIST
+  function renderFriendInList(friendUsername) {
+    const friendsContainer = document.getElementById('friends-list-container');
+    if (!friendsContainer) return;
+
+    if (friendsContainer.querySelector('.subtext')) {
+      friendsContainer.innerHTML = '';
+    }
+
+    if (document.getElementById(`friend-card-${friendUsername.toLowerCase()}`)) return;
+
+    const friendCard = document.createElement('div');
+    friendCard.id = `friend-card-${friendUsername.toLowerCase()}`;
+    friendCard.className = 'setting-row';
+    friendCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+    friendCard.innerHTML = `
+      <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
+        <img src="https://mc-heads.net/avatar/${friendUsername}/32" width="32" height="32" style="border-radius: 4px;">
+        <div class="setting-info">
+          <label><strong>${friendUsername}</strong></label>
+          <span class="subtext" style="color: #4ADE80;">Online</span>
+        </div>
+      </div>
+      <div>
+        <button class="secondary-btn" style="background: #a855f7; color: white; margin-right: 6px; display: inline-flex; align-items: center; gap: 6px;" onclick="startVoiceCall('${friendUsername}')">
+          <img src="assets/calling.png" width="14" height="14" alt="Call"> Call
+        </button>
+        <button class="secondary-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
+      </div>
+    `;
+    friendsContainer.appendChild(friendCard);
+  }
+
+  // --- WEBRTC VOICE CALL ENGINE ---
+  let peerConnection = null;
+  let localStream = null;
+  let currentCallTarget = null;
+  let incomingOffer = null;
+
+  const rtcConfig = {
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  };
+
+  window.startVoiceCall = async (targetUsername) => {
+    currentCallTarget = targetUsername;
+    
+    // CALLER UI MODE: SHOW "CALLING..." & HIDE ACCEPT BUTTON
+    showCallModal(targetUsername, "Calling...", true);
+
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (err) {
+      alert("Microphone access denied or not found.");
+      hideCallModal();
+      return;
+    }
+
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+    peerConnection.ontrack = (event) => {
+      document.getElementById('remote-audio').srcObject = event.streams[0];
+    };
+
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        ipcRenderer.invoke('send-socket-packet', {
+          type: 'ice_candidate',
+          from: currentUsername || activeAccount.name,
+          target: currentCallTarget,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    ipcRenderer.invoke('send-socket-packet', {
+      type: 'call_offer',
+      from: currentUsername || activeAccount.name,
+      target: currentCallTarget,
+      sdp: offer
+    });
+  };
+
+  document.getElementById('accept-call-btn')?.addEventListener('click', async () => {
+    if (!incomingOffer) return;
+
+    document.getElementById('call-status-text').innerText = "Connected";
+    document.getElementById('accept-call-btn').style.display = 'none';
+
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (err) {
+      alert("Microphone required to join the call.");
+      endCall();
+      return;
+    }
+
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+    peerConnection.ontrack = (event) => {
+      document.getElementById('remote-audio').srcObject = event.streams[0];
+    };
+
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        ipcRenderer.invoke('send-socket-packet', {
+          type: 'ice_candidate',
+          from: currentUsername || activeAccount.name,
+          target: currentCallTarget,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingOffer.sdp));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+
+    ipcRenderer.invoke('send-socket-packet', {
+      type: 'call_answer',
+      from: currentUsername || activeAccount.name,
+      target: currentCallTarget,
+      sdp: answer
+    });
+  });
+
+  document.getElementById('reject-call-btn')?.addEventListener('click', () => {
+    if (currentCallTarget) {
+      ipcRenderer.invoke('send-socket-packet', {
+        type: 'reject_call',
+        from: currentUsername || activeAccount.name,
+        target: currentCallTarget
+      });
+    }
+    endCall();
+  });
+
+  function endCall() {
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      localStream = null;
+    }
+    incomingOffer = null;
+    currentCallTarget = null;
+    hideCallModal();
+  }
+
+  function showCallModal(username, status, isCaller = false) {
+    const modal = document.getElementById('call-modal');
+    document.getElementById('call-user-avatar').src = `https://mc-heads.net/avatar/${username}/64`;
+    document.getElementById('call-user-name').innerText = username;
+    document.getElementById('call-status-text').innerText = status;
+
+    const acceptBtn = document.getElementById('accept-call-btn');
+    const rejectBtn = document.getElementById('reject-call-btn');
+
+    if (isCaller) {
+      if (acceptBtn) acceptBtn.style.display = 'none';
+      if (rejectBtn) rejectBtn.innerText = '🛑 Hang Up';
+    } else {
+      if (acceptBtn) {
+        acceptBtn.style.display = 'inline-flex';
+        acceptBtn.innerHTML = `<img src="assets/calling.png" width="16" height="16" alt="Call"> Accept`;
+      }
+      if (rejectBtn) rejectBtn.innerText = '🚫 Decline';
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function hideCallModal() {
+    const modal = document.getElementById('call-modal');
+    const acceptBtn = document.getElementById('accept-call-btn');
+    if (acceptBtn) acceptBtn.style.display = 'inline-flex';
+    modal.classList.add('hidden');
+  }
+
+  // --- TUXCLIENT THEMED AUTO-UPDATER LISTENERS ---
+  ipcRenderer.on('update-available-prompt', (event, version) => {
+    const modal = document.getElementById('update-modal');
+    const msg = document.getElementById('update-message');
+    const updateBtn = document.getElementById('update-now-btn');
+    const actions = document.getElementById('update-modal-actions');
+    const progressBox = document.getElementById('update-progress-box');
+
+    msg.innerText = `A new version (v${version}) of TuxClient is available!`;
+    progressBox.classList.add('hidden');
+    actions.classList.remove('hidden');
+
+    updateBtn.onclick = () => {
+      actions.classList.add('hidden');
+      progressBox.classList.remove('hidden');
+      ipcRenderer.send('start-download-update');
+    };
+
+    modal.classList.remove('hidden');
+  });
+
+  ipcRenderer.on('update-progress', (event, percent) => {
+    const fill = document.getElementById('update-progress-fill');
+    const text = document.getElementById('update-progress-text');
+    if (fill) fill.style.width = `${percent}%`;
+    if (text) text.innerText = `Downloading update: ${percent}%`;
+  });
+
+  ipcRenderer.on('update-ready-prompt', () => {
+    const modal = document.getElementById('update-modal');
+    const title = document.getElementById('update-title');
+    const msg = document.getElementById('update-message');
+    const actions = document.getElementById('update-modal-actions');
+    const progressBox = document.getElementById('update-progress-box');
+
+    title.innerText = "Update Ready!";
+    msg.innerText = "TuxClient has downloaded the update. Restart now to complete installation.";
+    progressBox.classList.add('hidden');
+
+    actions.innerHTML = `
+      <button class="download-btn" style="background: #a855f7; color: white; padding: 10px 20px; font-weight: bold;" onclick="ipcRenderer.send('install-update-now')">Restart & Install</button>
+    `;
+    actions.classList.remove('hidden');
+    modal.classList.remove('hidden');
+  });
+
+  // --- NETWORK PACKET LISTENER ---
+  ipcRenderer.on('network-packet', async (event, packet) => {
+    console.log('[UI] Incoming Network Packet:', packet);
+
+    // Initial Data Load
+    if (packet.type === 'initial_data') {
+      if (packet.friends && Array.isArray(packet.friends)) {
+        packet.friends.forEach(f => renderFriendInList(f));
+      }
+      if (packet.pendingRequests && Array.isArray(packet.pendingRequests)) {
+        const requestsList = document.getElementById('friend-requests-list');
+        if (requestsList && packet.pendingRequests.length > 0) {
+          requestsList.innerHTML = '';
+          packet.pendingRequests.forEach(requester => {
+            const reqCard = document.createElement('div');
+            reqCard.className = 'setting-row';
+            reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+            reqCard.innerHTML = `
+              <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
+                <img src="https://mc-heads.net/avatar/${requester}/32" width="32" height="32" style="border-radius: 4px;">
+                <div class="setting-info">
+                  <label><strong>${requester}</strong></label>
+                  <span class="subtext">Wants to be your friend</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button class="download-btn" onclick="respondFriendRequest('${requester}', 'accept', this)">Accept</button>
+                <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${requester}', 'decline', this)">Decline</button>
+              </div>
+            `;
+            requestsList.appendChild(reqCard);
+          });
+        }
+      }
+    }
+
+    // Friend Requests
+    if (packet.type === 'friend_request') {
+      const requestsList = document.getElementById('friend-requests-list');
+      if (requestsList) {
+        if (requestsList.querySelector('.subtext')) requestsList.innerHTML = '';
+
+        const reqCard = document.createElement('div');
+        reqCard.className = 'setting-row';
+        reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+        reqCard.innerHTML = `
+          <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
+            <img src="https://mc-heads.net/avatar/${packet.from}/32" width="32" height="32" style="border-radius: 4px;">
+            <div class="setting-info">
+              <label><strong>${packet.from}</strong></label>
+              <span class="subtext">Wants to be your friend</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="download-btn" onclick="respondFriendRequest('${packet.from}', 'accept', this)">Accept</button>
+            <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${packet.from}', 'decline', this)">Decline</button>
+          </div>
+        `;
+        requestsList.appendChild(reqCard);
+      }
+    }
+
+    if (packet.type === 'friend_accept') {
+      alert(`${packet.from} accepted your friend request!`);
+      renderFriendInList(packet.from);
+    }
+
+    if (packet.type === 'global_chat') {
+      const container = document.getElementById('chat-messages-container');
+      if (container) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-msg';
+        msgDiv.innerHTML = `<strong>${packet.sender || 'Player'}:</strong> ${packet.text}`;
+        container.appendChild(msgDiv);
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    if (packet.type === 'chat_message') {
+      if (currentActivePrivateFriend && currentActivePrivateFriend.toLowerCase() === packet.from.toLowerCase()) {
+        const container = document.getElementById('private-chat-messages-container');
+        if (container) {
+          const msgDiv = document.createElement('div');
+          msgDiv.className = 'chat-msg';
+          msgDiv.innerHTML = `<strong>${packet.from}:</strong> ${packet.text}`;
+          container.appendChild(msgDiv);
+          container.scrollTop = container.scrollHeight;
+        }
+      } else {
+        openDirectChat(packet.from);
+        const container = document.getElementById('private-chat-messages-container');
+        if (container) {
+          const msgDiv = document.createElement('div');
+          msgDiv.className = 'chat-msg';
+          msgDiv.innerHTML = `<strong>${packet.from}:</strong> ${packet.text}`;
+          container.appendChild(msgDiv);
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+    }
+
+    // Voice Call Handlers
+    if (packet.type === 'call_offer') {
+      currentCallTarget = packet.from;
+      incomingOffer = packet;
+      // RECIPIENT UI MODE: SHOW ACCEPT & DECLINE BUTTONS
+      showCallModal(packet.from, "Incoming Voice Call...", false);
+    }
+
+    if (packet.type === 'call_answer') {
+      if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(packet.sdp));
+        document.getElementById('call-status-text').innerText = "Connected";
+      }
+    }
+
+    if (packet.type === 'ice_candidate') {
+      if (peerConnection && packet.candidate) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(packet.candidate));
+      }
+    }
+
+    if (packet.type === 'reject_call' || packet.type === 'end_call') {
+      endCall();
+    }
+  });
+
+  window.sendFriendRequest = async () => {
+    const input = document.getElementById('add-friend-input');
+    const targetUsername = input ? input.value.trim() : '';
+    const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+
+    if (!targetUsername) {
+      alert('Please enter a username.');
+      return;
+    }
+
+    const result = await ipcRenderer.invoke('send-friend-request', {
+      targetUsername: targetUsername,
+      senderUsername: senderUsername
+    });
+
+    if (result.success) {
+      alert(result.message);
+      if (input) input.value = '';
+    } else {
+      alert(`Error: ${result.message}`);
+    }
+  };
+
+  window.respondFriendRequest = async (targetUsername, action, btnElement) => {
+    const currentUser = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const result = await ipcRenderer.invoke('respond-friend-request', {
+      targetUsername: targetUsername,
+      action: action,
+      currentUser: currentUser
+    });
+
+    if (result.success) {
+      const card = btnElement.closest('.setting-row');
+      if (card) card.remove();
+
+      if (action === 'accept') {
+        renderFriendInList(targetUsername);
+      }
+    }
+  };
+
+  window.sendChatMessage = () => {
+    const input = document.getElementById('chat-input');
+    if (!input || !input.value.trim()) return;
+
+    const content = input.value.trim();
+    const sender = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+
+    ipcRenderer.invoke('send-global-message', { sender: sender, text: content });
+    input.value = '';
+  };
+
+  window.sendPrivateChatMessage = () => {
+    const input = document.getElementById('private-chat-input');
+    if (!input || !input.value.trim() || !currentActivePrivateFriend) return;
+
+    const content = input.value.trim();
+    const sender = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+
+    ipcRenderer.invoke('send-socket-packet', {
+      type: 'chat_message',
+      from: sender,
+      recipient: currentActivePrivateFriend,
+      text: content
+    });
+
+    const container = document.getElementById('private-chat-messages-container');
+    if (container) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'chat-msg';
+      msgDiv.innerHTML = `<strong>You:</strong> ${content}`;
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    input.value = '';
+  };
+
+  // --- 3. VERSION FETCHING ---
+  let allVersions = [];
+
+  async function initializeVersions() {
+    const versionSelect = document.getElementById('version-select');
+    if (!versionSelect) return;
+
+    try {
+      if (allVersions.length === 0) {
+        allVersions = await ipcRenderer.invoke('get-mc-versions');
+      }
+
+      const showSnapshots = document.getElementById('show-snapshots')?.checked || false;
+      const showHistorical = document.getElementById('show-historical')?.checked || false;
+
+      versionSelect.innerHTML = '';
+
+      if (!allVersions || allVersions.length === 0) {
+        versionSelect.innerHTML = '<option value="">Failed to load versions</option>';
+        return;
+      }
+
+      allVersions.forEach(v => {
+        const isRelease = v.type === 'release';
+        const isSnapshot = v.type === 'snapshot';
+        const isHistorical = v.type === 'old_beta' || v.type === 'old_alpha';
+
+        if (isRelease || (isSnapshot && showSnapshots) || (isHistorical && showHistorical)) {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.innerText = isHistorical ? `[Old] ${v.id}` : isSnapshot ? `[Snapshot] ${v.id}` : `Release ${v.id}`;
+          versionSelect.appendChild(opt);
+        }
+      });
+    } catch (err) {
+      console.error("Error loading versions:", err);
+      versionSelect.innerHTML = '<option value="">Error fetching list</option>';
+    }
+  }
+
+  document.getElementById('show-snapshots')?.addEventListener('change', initializeVersions);
+  document.getElementById('show-historical')?.addEventListener('change', initializeVersions);
+
+  // --- 4. AUTH & LAUNCH CONTROLS ---
+  const loginBtn = document.getElementById('login-btn');
+  const playBtn = document.getElementById('play-btn');
+  const userCard = document.getElementById('user-card');
+  const statusText = document.getElementById('status-text');
+  const progressContainer = document.getElementById('progress-container');
+  const progressFill = document.getElementById('progress-fill');
+  const progressPercentage = document.getElementById('progress-percentage');
+  const progressStatus = document.getElementById('progress-status');
+
+  let userAuthToken = null;
+  let currentUsername = null;
+
+  let savedAccounts = JSON.parse(localStorage.getItem('tux_accounts') || '[]');
+  let activeAccount = JSON.parse(localStorage.getItem('tux_active_account') || 'null');
+
+  function updateAccountUI() {
+    const activeName = document.getElementById('active-profile-name');
+    const activeUuid = document.getElementById('active-profile-uuid');
+    const activeAvatar = document.getElementById('active-profile-avatar');
+    const signoutBtn = document.getElementById('signout-btn');
+    const accountsList = document.getElementById('accounts-list');
+
+    if (activeAccount) {
+      userAuthToken = activeAccount.mclcAuth;
+      currentUsername = activeAccount.name;
+
+      if (activeName) activeName.textContent = activeAccount.name;
+      if (activeUuid) activeUuid.textContent = `UUID: ${activeAccount.uuid.substring(0, 13)}...`;
+      if (activeAvatar) activeAvatar.src = `https://mc-heads.net/avatar/${activeAccount.uuid}/32`;
+      if (signoutBtn) signoutBtn.classList.remove('hidden');
+
+      if (userCard) {
+        userCard.innerHTML = `
+          <div class="profile-info" style="display: flex; align-items: center; gap: 8px;">
+            <img src="https://mc-heads.net/avatar/${activeAccount.name}/24" alt="Avatar" style="border-radius: 4px;">
+            <span>User: <strong>${activeAccount.name}</strong></span>
+          </div>
+        `;
+      }
+
+      if (statusText) statusText.innerText = `Status: Ready`;
+      if (playBtn) playBtn.disabled = false;
+    } else {
+      userAuthToken = null;
+      currentUsername = null;
+
+      if (activeName) activeName.textContent = "Not Signed In";
+      if (activeUuid) activeUuid.textContent = "No active session";
+      if (activeAvatar) activeAvatar.src = "https://mc-heads.net/avatar/MSTEVE/32";
+      if (signoutBtn) signoutBtn.classList.add('hidden');
+
+      if (userCard) {
+        userCard.innerHTML = `<button id="login-btn">Sign In with Microsoft</button>`;
+        document.getElementById('login-btn')?.addEventListener('click', triggerLogin);
+      }
+
+      if (statusText) statusText.innerText = "Status: Waiting for Sign-in...";
+      if (playBtn) playBtn.disabled = true;
+    }
+
+    if (accountsList) {
+      if (savedAccounts.length === 0) {
+        accountsList.innerHTML = '<p class="subtext">No accounts saved yet. Click "+ Add Account" to sign in with Microsoft.</p>';
+      } else {
+        accountsList.innerHTML = savedAccounts.map(acc => {
+          const isActive = activeAccount && activeAccount.uuid === acc.uuid;
+          return `
+            <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px;">
+              <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
+                <img src="https://mc-heads.net/avatar/${acc.uuid}/32" width="32" height="32" style="border-radius: 4px;">
+                <div class="setting-info">
+                  <label>${acc.name} ${isActive ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #a855f7;">ACTIVE</span>' : ''}</label>
+                  <span class="subtext">${acc.uuid.substring(0, 18)}...</span>
+                </div>
+              </div>
+              <div>
+                ${!isActive ? `<button class="secondary-btn" onclick="selectAccount('${acc.uuid}')">Use Account</button>` : ''}
+                <button class="secondary-btn close-btn-style" style="margin-left: 6px;" onclick="removeAccount('${acc.uuid}')">Remove</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    initBackendNetwork();
+  }
+
+  function triggerLogin() {
+    if (statusText) statusText.innerText = "Status: Opening Microsoft Login...";
+    ipcRenderer.send('microsoft-login');
+  }
+
+  loginBtn?.addEventListener('click', triggerLogin);
+  document.getElementById('add-account-btn')?.addEventListener('click', triggerLogin);
+
+  ipcRenderer.on('login-success', (event, accountData) => {
+    activeAccount = accountData;
+    if (!savedAccounts.some(acc => acc.uuid === accountData.uuid)) {
+      savedAccounts.push(accountData);
+    }
+    localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
+    localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
+    updateAccountUI();
+  });
+
+  ipcRenderer.on('login-error', (event, errorMessage) => {
+    if (statusText) statusText.innerText = `Status: ${errorMessage}`;
+  });
+
+  document.getElementById('signout-btn')?.addEventListener('click', () => {
+    activeAccount = null;
+    localStorage.removeItem('tux_active_account');
+    updateAccountUI();
+  });
+
+  window.selectAccount = (uuid) => {
+    const acc = savedAccounts.find(a => a.uuid === uuid);
+    if (acc) {
+      activeAccount = acc;
+      localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
+      updateAccountUI();
+    }
+  };
+
+  window.removeAccount = (uuid) => {
+    savedAccounts = savedAccounts.filter(a => a.uuid !== uuid);
+    if (activeAccount && activeAccount.uuid === uuid) {
+      activeAccount = savedAccounts[0] || null;
+      if (activeAccount) localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
+      else localStorage.removeItem('tux_active_account');
+    }
+    localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
+    updateAccountUI();
+  };
+
+  playBtn?.addEventListener('click', () => {
+    if (!userAuthToken) return;
+    const selectedVersion = document.getElementById('version-select').value;
+    const selectedLoader = document.getElementById('loader-select').value;
+    const ramAllocation = document.getElementById('ram-slider')?.value || 4;
+
+    playBtn.disabled = true;
+    playBtn.innerText = "LAUNCHING...";
+    if (progressContainer) progressContainer.classList.remove('hidden');
+
+    ipcRenderer.send('launch-game', {
+      version: selectedVersion,
+      modLoader: selectedLoader,
+      auth: userAuthToken,
+      ram: ramAllocation
+    });
+  });
+
+  ipcRenderer.on('launch-status', (event, status) => { 
+    if (statusText) statusText.innerText = `Status: ${status}`;
+    if ((status === 'Ready' || status.includes('Ready')) && playBtn) {
+      playBtn.disabled = false;
+      playBtn.innerText = "Launch Game";
+      setTimeout(() => {
+        if (progressContainer) progressContainer.classList.add('hidden');
+      }, 1000);
+    }
+  });
+
+  ipcRenderer.on('launch-progress', (event, data) => {
+    if (progressContainer) progressContainer.classList.remove('hidden');
+    if (progressFill) progressFill.style.width = `${data.percent}%`;
+    if (progressPercentage) progressPercentage.innerText = `${data.percent}%`;
+    if (progressStatus) progressStatus.innerText = data.type || "Downloading...";
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    initializeVersions();
+    updateAccountUI();
+  });
+
+  // --- 5. 3D SKIN VIEWER ---
+  let skinViewer = null;
+
+  function initSkinViewer() {
+    const canvasEl = document.getElementById("skin_container");
+    if (!canvasEl) return null;
+
+    if (!skinViewer) {
+      try {
+        skinViewer = new skinview3d.SkinViewer({
+          canvas: canvasEl,
+          width: 250,
+          height: 340,
+          skin: "https://crafatar.com/skins/Steve"
+        });
+
+        skinViewer.autoRotate = true;
+        skinview3d.createOrbitControls(skinViewer);
+        skinViewer.animation = new skinview3d.WalkingAnimation();
+      } catch (e) {
+        console.error("Failed to initialize skinViewer:", e);
+      }
+    }
+    return skinViewer;
+  }
+
+  async function loadSkinByUsername(username) {
+    if (!skinViewer) skinViewer = initSkinViewer();
+    if (!skinViewer) return;
+
+    try {
+      const target = (username && username.trim() !== '') ? username.trim() : 'Steve';
+      const base64Skin = await ipcRenderer.invoke('fetch-skin-base64', target);
+
+      if (base64Skin) {
+        skinViewer.loadSkin(base64Skin);
+      } else {
+        skinViewer.loadSkin(`https://crafatar.com/skins/${target}`);
+      }
+
+      const usernameInput = document.getElementById('skin-username-input');
+      if (usernameInput) usernameInput.value = target;
+    } catch (err) {
+      console.error("Skin load error:", err);
+      skinViewer.loadSkin("https://crafatar.com/skins/Steve");
+    }
+  }
+
+  // --- 6. MOD MANAGEMENT & SEARCH ---
+  async function loadInstalledMods() {
+    const container = document.getElementById('installed-mods-list');
+    if (!container) return;
+
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    container.innerHTML = '<p class="subtext">Loading installed mods...</p>';
+
+    try {
+      const mods = await ipcRenderer.invoke('get-installed-mods', { version, loader });
+      const userMods = mods ? mods.filter(m => !m.fileName.startsWith('tuxclient-')) : [];
+
+      if (!userMods || userMods.length === 0) {
+        container.innerHTML = `<p class="subtext">No user mods installed for ${version} (${loader}).</p>`;
+        return;
+      }
+
+      container.innerHTML = userMods.map(m => `
+        <div class="mod-card">
+          <div class="mod-info"><strong>${m.name}</strong></div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label class="switch" title="Enable / Disable Mod">
+              <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName}', this.checked)">
+              <span class="slider"></span>
+            </label>
+            <button class="delete-icon-btn" onclick="deleteMod('${m.fileName}')" title="Delete Mod">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    } catch {
+      container.innerHTML = '<p class="subtext">Error loading mods folder.</p>';
+    }
+  }
+
+  window.toggleMod = async (fileName, enable) => {
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    await ipcRenderer.invoke('toggle-mod', { version, loader, fileName, enable });
+    loadInstalledMods();
+  };
+
+  window.deleteMod = async (fileName) => {
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    await ipcRenderer.invoke('delete-mod', { version, loader, fileName });
+    loadInstalledMods();
+  };
+
+  window.searchModrinth = async () => {
+    const query = document.getElementById('mod-search-input')?.value || '';
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    const container = document.getElementById('modrinth-search-list');
+
+    if (!container) return;
+    container.innerHTML = '<p class="subtext">Loading mods...</p>';
+
+    try {
+      const mods = await ipcRenderer.invoke('search-modrinth', { query, version, loader, projectType: 'mod' });
+      if (!mods || mods.length === 0) {
+        container.innerHTML = `<p class="subtext">No compatible mods found.</p>`;
+        return;
+      }
+      container.innerHTML = mods.map(m => `
+        <div class="mod-card">
+          <img src="${m.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
+          <div class="mod-info" style="flex:1;">
+            <strong>${m.title}</strong>
+            <p class="subtext">${m.description ? m.description.substring(0, 60) : ''}...</p>
+          </div>
+          <button class="download-btn" onclick="installContent('${m.project_id}', '${m.title}', 'mod')">Install</button>
+        </div>
+      `).join('');
+    } catch {
+      container.innerHTML = '<p class="subtext">Failed to fetch mod recommendations.</p>';
+    }
+  };
+
+  window.installContent = async (projectId, title, projectType) => {
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    try {
+      if (progressContainer) progressContainer.classList.remove('hidden');
+      if (progressStatus) progressStatus.innerText = `Preparing ${title}...`;
+
+      await ipcRenderer.invoke('download-content-file', { projectId, version, loader, projectType });
+
+      if (projectType === 'mod') loadInstalledMods();
+      else if (projectType === 'resourcepack') loadInstalledPacks('resourcepacks');
+      else loadInstalledPacks('shaders');
+    } catch (err) {
+      alert(`Download failed: ${err.message}`);
+      if (progressContainer) progressContainer.classList.add('hidden');
+    }
+  };
+
+  // --- 7. RESOURCE PACKS & SHADERS MANAGER ---
+  async function loadInstalledPacks(typeFolder) {
+    const container = document.getElementById(typeFolder === 'shaders' ? 'installed-shaders-list' : 'installed-packs-list');
+    if (!container) return;
+
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    container.innerHTML = '<p class="subtext">Loading installed items...</p>';
+
+    try {
+      const packs = await ipcRenderer.invoke('get-installed-packs', { version, loader, type: typeFolder });
+      if (!packs || packs.length === 0) {
+        container.innerHTML = `<p class="subtext">No ${typeFolder} installed.</p>`;
+        return;
+      }
+
+      container.innerHTML = packs.map(p => `
+        <div class="mod-card">
+          <div class="mod-info"><strong>${p.name}</strong></div>
+          <button class="delete-icon-btn" onclick="deletePack('${p.fileName}', '${typeFolder}')" title="Delete">🗑️</button>
+        </div>
+      `).join('');
+    } catch {
+      container.innerHTML = '<p class="subtext">Error loading folder.</p>';
+    }
+  }
+
+  window.deletePack = async (fileName, typeFolder) => {
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    await ipcRenderer.invoke('delete-pack', { version, loader, type: typeFolder, fileName });
+    loadInstalledPacks(typeFolder);
+  };
+
+  window.searchPacksModrinth = async () => {
+    const query = document.getElementById('pack-search-input')?.value || '';
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    const container = document.getElementById('pack-modrinth-list');
+
+    if (!container) return;
+    container.innerHTML = '<p class="subtext">Loading resource packs...</p>';
+
+    try {
+      const results = await ipcRenderer.invoke('search-modrinth', { query, version, loader, projectType: 'resourcepack' });
+      if (!results || results.length === 0) {
+        container.innerHTML = `<p class="subtext">No items found.</p>`;
+        return;
+      }
+      container.innerHTML = results.map(r => `
+        <div class="mod-card">
+          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
+          <div class="mod-info" style="flex:1;">
+            <strong>${r.title}</strong>
+            <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
+          </div>
+          <button class="download-btn" onclick="installContent('${r.project_id}', '${r.title}', 'resourcepack')">Install</button>
+        </div>
+      `).join('');
+    } catch {
+      container.innerHTML = '<p class="subtext">Failed to fetch resource pack recommendations.</p>';
+    }
+  };
+
+  window.searchShadersModrinth = async () => {
+    const query = document.getElementById('shader-search-input')?.value || '';
+    const version = document.getElementById('version-select')?.value || '1.21';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    const container = document.getElementById('shader-modrinth-list');
+
+    if (!container) return;
+    container.innerHTML = '<p class="subtext">Loading shaders...</p>';
+
+    try {
+      const results = await ipcRenderer.invoke('search-modrinth', { query, version, loader, projectType: 'shader' });
+      if (!results || results.length === 0) {
+        container.innerHTML = `<p class="subtext">No items found.</p>`;
+        return;
+      }
+      container.innerHTML = results.map(r => `
+        <div class="mod-card">
+          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
+          <div class="mod-info" style="flex:1;">
+            <strong>${r.title}</strong>
+            <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
+          </div>
+          <button class="download-btn" onclick="installContent('${r.project_id}', '${r.title}', 'shader')">Install</button>
+        </div>
+      `).join('');
+    } catch {
+      container.innerHTML = '<p class="subtext">Failed to fetch shader recommendations.</p>';
+    }
+  };
+
+  // --- 8. SETTINGS HANDLERS ---
+  function initSettings() {
+    const ramSlider = document.getElementById('ram-slider');
+    const ramDisplay = document.getElementById('ram-display');
+    const autostartToggle = document.getElementById('autostart-toggle');
+    const openFolderBtn = document.getElementById('open-folder-btn');
+
+    if (ramSlider && ramDisplay) {
+      ramSlider.oninput = (e) => ramDisplay.innerText = `${e.target.value} GB`;
+    }
+
+    if (autostartToggle) {
+      ipcRenderer.invoke('get-autostart-status').then(status => autostartToggle.checked = status);
+      autostartToggle.onchange = (e) => ipcRenderer.send('set-autostart', e.target.checked);
+    }
+
+    if (openFolderBtn) {
+      openFolderBtn.onclick = () => ipcRenderer.send('open-game-folder');
+    }
+  }
+  </script>
+</body>
+</html>
