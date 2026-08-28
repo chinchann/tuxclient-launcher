@@ -234,7 +234,7 @@ async function ensurePortableJava(event) {
 }
 
 // --- GAME DIRECTORY & BUNDLED MOD INJECTION HELPER ---
-function ensureBundledMods(modsDir) {
+function ensureBundledMods(modsDir, mcVersion) {
   const sourceBundledDir = app.isPackaged
     ? path.join(process.resourcesPath, 'assets', 'client-mods')
     : path.join(__dirname, 'assets', 'client-mods');
@@ -246,11 +246,34 @@ function ensureBundledMods(modsDir) {
         const sourcePath = path.join(sourceBundledDir, file);
         const destPath = path.join(modsDir, file);
 
-        try {
-          fs.copyFileSync(sourcePath, destPath);
-          console.log(`[TuxLauncher] Synced mod: ${file} into ${modsDir}`);
-        } catch (err) {
-          console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
+        // Inject TuxClient mod strictly when launching Minecraft 1.21.1
+        if (file.toLowerCase().includes('tuxclient')) {
+          if (mcVersion === '1.21.1') {
+            try {
+              fs.copyFileSync(sourcePath, destPath);
+              console.log(`[TuxLauncher] Injected ${file} into 1.21.1 mods folder.`);
+            } catch (err) {
+              console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
+            }
+          } else {
+            // Purge TuxClient mod if present in a non-1.21.1 instance to avoid method signature crashes
+            if (fs.existsSync(destPath)) {
+              try {
+                fs.unlinkSync(destPath);
+                console.log(`[TuxLauncher] Purged incompatible ${file} from ${mcVersion} instance.`);
+              } catch (err) {
+                console.error(`[TuxLauncher Error] Failed to purge ${file}:`, err);
+              }
+            }
+          }
+        } else {
+          // Standard bundled utility mods (e.g. Fabric API) inject normally across versions
+          try {
+            fs.copyFileSync(sourcePath, destPath);
+            console.log(`[TuxLauncher] Synced mod: ${file} into ${modsDir}`);
+          } catch (err) {
+            console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
+          }
         }
       }
     });
@@ -267,7 +290,7 @@ function getInstancePath(version = '1.21.1', loader = 'fabric') {
   if (!fs.existsSync(resourcePacksDir)) fs.mkdirSync(resourcePacksDir, { recursive: true });
   if (!fs.existsSync(shaderPacksDir)) fs.mkdirSync(shaderPacksDir, { recursive: true });
 
-  ensureBundledMods(modsDir);
+  ensureBundledMods(modsDir, version);
 
   return { instanceDir, modsDir, resourcePacksDir, shaderPacksDir };
 }
