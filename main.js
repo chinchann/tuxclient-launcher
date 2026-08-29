@@ -741,7 +741,9 @@ ipcMain.handle('delete-pack', async (event, { version = '1.21.1', loader = 'fabr
 
 ipcMain.handle('search-modrinth', async (event, { query, version, loader = 'fabric', projectType = 'mod' }) => {
   try {
-    let facets = projectType === 'mod' ? `[["categories:${loader}"],["versions:${version}"],["project_type:mod"]]` : `[["versions:${version}"],["project_type:${projectType}"]]`;
+    let facets = projectType === 'mod' 
+      ? `[["categories:${loader}"],["versions:${version}"],["project_type:mod"]]` 
+      : `[["versions:${version}"],["project_type:${projectType}"]]`;
     const res = await axios.get(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&facets=${encodeURIComponent(facets)}&limit=12`, { headers: { 'User-Agent': 'TuxClient/1.0.0' } });
     return res.data.hits;
   } catch { return []; }
@@ -753,8 +755,16 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
   if (projectType === 'resourcepack') targetDir = paths.resourcePacksDir;
   if (projectType === 'shader') targetDir = paths.shaderPacksDir;
 
-  const vRes = await axios.get(`https://api.modrinth.com/v2/project/${projectId}/version?game_versions=["${version}"]`, { headers: { 'User-Agent': 'TuxClient/1.0.0' } });
-  if (!vRes.data.length) throw new Error('No compatible file found');
+  // Enforce strict loader + game version filter on download resolution
+  let versionUrl = `https://api.modrinth.com/v2/project/${projectId}/version?game_versions=["${encodeURIComponent(version)}"]`;
+  if (projectType === 'mod') {
+    versionUrl += `&loaders=["${encodeURIComponent(loader.toLowerCase())}"]`;
+  }
+
+  const vRes = await axios.get(versionUrl, { headers: { 'User-Agent': 'TuxClient/1.0.0' } });
+  if (!vRes.data || !vRes.data.length) {
+    throw new Error(`No compatible ${projectType} file found for Minecraft ${version} (${loader}).`);
+  }
 
   const fileInfo = vRes.data[0].files.find(f => f.primary) || vRes.data[0].files[0];
   const filePath = path.join(targetDir, fileInfo.filename);
