@@ -12,6 +12,18 @@
     .status-offline {
       color: #64748B !important;
     }
+    .chat-date-divider {
+      text-align: center;
+      color: #9CA3AF;
+      font-size: 11px;
+      margin: 12px 0 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      line-height: 0.1em;
+    }
+    .chat-date-divider span {
+      background: #14141F;
+      padding: 0 10px;
+    }
   </style>
 </head>
 <body>
@@ -326,9 +338,7 @@
         <h3 id="chat-panel-title">Global Chat</h3>
         <button id="close-chat-btn" class="secondary-btn close-btn-style" style="padding: 4px 8px; font-size: 10px;">✕</button>
       </div>
-      <div class="chat-messages" id="chat-messages-container">
-        <div class="chat-msg system"><span>Welcome to TuxClient chat!</span></div>
-      </div>
+      <div class="chat-messages" id="chat-messages-container"></div>
       <div class="chat-input-row">
         <input type="text" id="chat-input" placeholder="Type a message..." onkeyup="if(event.key === 'Enter') sendChatMessage()">
         <button onclick="sendChatMessage()">Send</button>
@@ -340,9 +350,7 @@
         <h3 id="private-chat-title">Direct Chat</h3>
         <button id="close-private-chat-btn" class="secondary-btn close-btn-style" style="padding: 4px 8px; font-size: 10px;">✕</button>
       </div>
-      <div class="chat-messages" id="private-chat-messages-container">
-        <div class="chat-msg system"><span>Direct chat session initialized.</span></div>
-      </div>
+      <div class="chat-messages" id="private-chat-messages-container"></div>
       <div class="chat-input-row">
         <input type="text" id="private-chat-input" placeholder="Type private message..." onkeyup="if(event.key === 'Enter') sendPrivateChatMessage()">
         <button onclick="sendPrivateChatMessage()">Send</button>
@@ -500,6 +508,78 @@
   document.getElementById('version-select')?.addEventListener('change', refreshActiveTabContent);
   document.getElementById('loader-select')?.addEventListener('change', refreshActiveTabContent);
 
+  // --- TIME AND DATE FORMATTING HELPERS ---
+  function formatTime(timestamp) {
+    const date = new Date(timestamp || Date.now());
+    let hours = date.getHours();
+    let minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12 || 12;
+    minutes = minutes < 10 ? '0' + minutes : minutes;
+    return `${hours}:${minutes}${ampm}`;
+  }
+
+  function getDateDividerLabel(timestamp) {
+    const msgDate = new Date(timestamp);
+    const now = new Date();
+    
+    const msgZero = new Date(msgDate.getFullYear(), msgDate.getMonth(), msgDate.getDate());
+    const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const diffDays = Math.round((nowZero - msgZero) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    
+    const month = msgDate.getMonth() + 1;
+    const day = msgDate.getDate();
+    const year = String(msgDate.getFullYear()).slice(-2);
+    return `${month}/${day}/${year}`;
+  }
+
+  function formatOfflineDuration(lastSeenMs) {
+    if (!lastSeenMs) return 'Offline';
+    const diffMs = Date.now() - Number(lastSeenMs);
+    const mins = Math.floor(diffMs / (1000 * 60));
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+
+    if (days > 0) return `Offline (${days}d ago)`;
+    if (hrs > 0) return `Offline (${hrs}h ago)`;
+    if (mins > 0) return `Offline (${mins}m ago)`;
+    return `Offline (just now)`;
+  }
+
+  // --- CHAT PERSISTENCE MEMORY & APPEND HELPER ---
+  let activeChatHistory = { GLOBAL: [] };
+
+  function appendChatMessage(containerId, sender, text, timestamp) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const ts = timestamp || Date.now();
+    const dateLabel = getDateDividerLabel(ts);
+    const timeStr = formatTime(ts);
+
+    const dividers = container.querySelectorAll('.chat-date-divider');
+    const lastDivider = dividers.length > 0 ? dividers[dividers.length - 1] : null;
+
+    if (!lastDivider || lastDivider.getAttribute('data-date') !== dateLabel) {
+      const divider = document.createElement('div');
+      divider.className = 'chat-date-divider';
+      divider.setAttribute('data-date', dateLabel);
+      divider.innerHTML = `<span>${dateLabel}</span>`;
+      container.appendChild(divider);
+    }
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-msg';
+    msgDiv.style.cssText = 'margin-bottom: 6px; font-size: 13px; color: #E2E8F0; word-break: break-word;';
+    msgDiv.innerHTML = `<strong>${sender}:</strong> ${text} <span style="font-size: 10px; color: #64748B; margin-left: 6px;">${timeStr}</span>`;
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight;
+  }
+
   // --- CHAT & SOCIAL NETWORK CONTROLS ---
   const chatPanel = document.getElementById('chat-panel');
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
@@ -525,10 +605,16 @@
 
     const container = document.getElementById('private-chat-messages-container');
     if (container) {
-      container.innerHTML = `<div class="chat-msg system"><span>Private session with ${friendUsername}</span></div>`;
+      container.innerHTML = '';
     }
 
     privateChatPanel?.classList.remove('hidden');
+
+    if (activeChatHistory[friendUsername]) {
+      activeChatHistory[friendUsername].forEach(msg => {
+        appendChatMessage('private-chat-messages-container', msg.sender, msg.text, msg.timestamp);
+      });
+    }
   };
 
   async function initBackendNetwork() {
@@ -552,6 +638,7 @@
     const friendUsername = typeof friendData === 'string' ? friendData : friendData.username;
     const status = typeof friendData === 'string' ? 'online' : (friendData.status || 'offline');
     const isOnline = status === 'online';
+    const offlineText = isOnline ? 'Online' : formatOfflineDuration(friendData.lastSeen);
 
     let friendCard = document.getElementById(`friend-card-${friendUsername.toLowerCase()}`);
     
@@ -559,7 +646,7 @@
       const statusText = friendCard.querySelector('.friend-status-text');
       const callBtn = friendCard.querySelector('.call-btn-action');
       if (statusText) {
-        statusText.innerText = isOnline ? 'Online' : 'Offline';
+        statusText.innerText = offlineText;
         statusText.className = `subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}`;
       }
       if (callBtn) {
@@ -579,7 +666,7 @@
         <img src="https://mc-heads.net/avatar/${friendUsername}/32" width="32" height="32" style="border-radius: 4px;">
         <div class="setting-info">
           <label><strong>${friendUsername}</strong></label>
-          <span class="subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}">${isOnline ? 'Online' : 'Offline'}</span>
+          <span class="subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}">${offlineText}</span>
         </div>
       </div>
       <div>
@@ -822,10 +909,31 @@
           });
         }
       }
+
+      if (packet.chatLogs && Array.isArray(packet.chatLogs)) {
+        document.getElementById('chat-messages-container').innerHTML = '';
+        const myName = currentUsername || (activeAccount ? activeAccount.name : '');
+
+        packet.chatLogs.forEach(log => {
+          if (log.receiverUuid === 'GLOBAL') {
+            appendChatMessage('chat-messages-container', log.senderUuid, log.content, log.timestamp);
+          } else {
+            const friendKey = log.senderUuid === myName ? log.receiverUuid : log.senderUuid;
+            if (!activeChatHistory[friendKey]) activeChatHistory[friendKey] = [];
+            
+            const displaySender = log.senderUuid === myName ? 'You' : log.senderUuid;
+            activeChatHistory[friendKey].push({
+              sender: displaySender,
+              text: log.content,
+              timestamp: log.timestamp
+            });
+          }
+        });
+      }
     }
 
     if (packet.type === 'user_status_change') {
-      renderFriendInList({ username: packet.username, status: packet.status });
+      renderFriendInList({ username: packet.username, status: packet.status, lastSeen: packet.lastSeen });
     }
 
     if (packet.type === 'friend_request') {
@@ -859,36 +967,20 @@
     }
 
     if (packet.type === 'global_chat') {
-      const container = document.getElementById('chat-messages-container');
-      if (container) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'chat-msg';
-        msgDiv.innerHTML = `<strong>${packet.sender || 'Player'}:</strong> ${packet.text}`;
-        container.appendChild(msgDiv);
-        container.scrollTop = container.scrollHeight;
-      }
+      appendChatMessage('chat-messages-container', packet.sender || 'Player', packet.text, packet.timestamp);
     }
 
     if (packet.type === 'chat_message') {
+      const friendKey = packet.from;
+      const ts = packet.timestamp || Date.now();
+      
+      if (!activeChatHistory[friendKey]) activeChatHistory[friendKey] = [];
+      activeChatHistory[friendKey].push({ sender: packet.from, text: packet.text, timestamp: ts });
+
       if (currentActivePrivateFriend && currentActivePrivateFriend.toLowerCase() === packet.from.toLowerCase()) {
-        const container = document.getElementById('private-chat-messages-container');
-        if (container) {
-          const msgDiv = document.createElement('div');
-          msgDiv.className = 'chat-msg';
-          msgDiv.innerHTML = `<strong>${packet.from}:</strong> ${packet.text}`;
-          container.appendChild(msgDiv);
-          container.scrollTop = container.scrollHeight;
-        }
+        appendChatMessage('private-chat-messages-container', packet.from, packet.text, ts);
       } else {
         openDirectChat(packet.from);
-        const container = document.getElementById('private-chat-messages-container');
-        if (container) {
-          const msgDiv = document.createElement('div');
-          msgDiv.className = 'chat-msg';
-          msgDiv.innerHTML = `<strong>${packet.from}:</strong> ${packet.text}`;
-          container.appendChild(msgDiv);
-          container.scrollTop = container.scrollHeight;
-        }
       }
     }
 
@@ -978,23 +1070,26 @@
 
     const content = input.value.trim();
     const sender = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const timestamp = Date.now();
 
     ipcRenderer.invoke('send-socket-packet', {
       type: 'chat_message',
       from: sender,
       recipient: currentActivePrivateFriend,
-      text: content
+      text: content,
+      timestamp: timestamp
     });
 
-    const container = document.getElementById('private-chat-messages-container');
-    if (container) {
-      const msgDiv = document.createElement('div');
-      msgDiv.className = 'chat-msg';
-      msgDiv.innerHTML = `<strong>You:</strong> ${content}`;
-      container.appendChild(msgDiv);
-      container.scrollTop = container.scrollHeight;
+    if (!activeChatHistory[currentActivePrivateFriend]) {
+      activeChatHistory[currentActivePrivateFriend] = [];
     }
+    activeChatHistory[currentActivePrivateFriend].push({
+      sender: 'You',
+      text: content,
+      timestamp: timestamp
+    });
 
+    appendChatMessage('private-chat-messages-container', 'You', content, timestamp);
     input.value = '';
   };
 
