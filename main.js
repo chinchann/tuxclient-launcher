@@ -755,7 +755,6 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
   if (projectType === 'resourcepack') targetDir = paths.resourcePacksDir;
   if (projectType === 'shader') targetDir = paths.shaderPacksDir;
 
-  // Enforce strict loader + game version filter on download resolution
   let versionUrl = `https://api.modrinth.com/v2/project/${projectId}/version?game_versions=["${encodeURIComponent(version)}"]`;
   if (projectType === 'mod') {
     versionUrl += `&loaders=["${encodeURIComponent(loader.toLowerCase())}"]`;
@@ -766,7 +765,50 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
     throw new Error(`No compatible ${projectType} file found for Minecraft ${version} (${loader}).`);
   }
 
-  const fileInfo = vRes.data[0].files.find(f => f.primary) || vRes.data[0].files[0];
+  // Filter for stable builds first to prevent grabbing broken alpha/beta pre-releases
+  const stableVersion = vRes.data.find(v => v.version_type === 'release') || vRes.data[0];
+  const fileInfo = stableVersion.files.find(f => f.primary) || stableVersion.files[0];
+  const filePath = path.join(targetDir, fileInfo.filename);
+
+  const response = await axios({ url: fileInfo.url, method: 'GET', responseType: 'stream' });
+  const totalLength = parseInt(response.headers['content-length'], 10);
+  let downloadedLength = 0;
+
+  const writer = fs.createWriteStream(filePath);
+
+  response.data.on('data', (chunk) => {
+    downloadedLength += chunk.length;
+    if (totalLength) {
+      const percent = Math.round((downloadedLength / totalLength) * 100);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('launch-progress', { type: `Downloading ${fileInfo.filename}...`, percent });
+      }
+    }
+  });
+
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('launch-progress', { type: 'Download Complete!', percent: 100 });
+        setTimeout(() => mainWindow.webContents.send('launch-status', 'Ready'), 1500);
+      }
+      resolve(fileInfo.filename);
+    });
+    writer.on('error', reject);
+  });
+});
+
+// Handler for custom version selection from the sidebar dropdown
+ipcMain.handle('download-content-version-id', async (event, { projectId, versionId, version = '1.21.1', loader = 'fabric' }) => {
+  const paths = getInstancePath(version, loader);
+  const targetDir = paths.modsDir;
+
+  const vRes = await axios.get(`https://api.modrinth.com/v2/version/${versionId}`, { headers: { 'User-Agent': 'TuxClient/1.0.0' } });
+  if (!vRes.data) throw new Error('Selected version build not found.');
+
+  const fileInfo = vRes.data.files.find(f => f.primary) || vRes.data.files[0];
   const filePath = path.join(targetDir, fileInfo.filename);
 
   const response = await axios({ url: fileInfo.url, method: 'GET', responseType: 'stream' });
