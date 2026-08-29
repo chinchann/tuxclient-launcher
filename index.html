@@ -622,10 +622,10 @@
     };
 
     peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate && currentCallTarget) {
         ipcRenderer.invoke('send-socket-packet', {
           type: 'ice_candidate',
-          from: currentUsername || activeAccount.name,
+          from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
           target: currentCallTarget,
           candidate: event.candidate
         });
@@ -637,7 +637,7 @@
 
     ipcRenderer.invoke('send-socket-packet', {
       type: 'start_call',
-      from: currentUsername || activeAccount.name,
+      from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
       target: targetUsername,
       sdp: offer
     });
@@ -646,6 +646,7 @@
   document.getElementById('accept-call-btn')?.addEventListener('click', async () => {
     if (!incomingOffer) return;
 
+    currentCallTarget = incomingOffer.from;
     document.getElementById('call-status-text').innerText = "Connected";
     document.getElementById('accept-call-btn').style.display = 'none';
 
@@ -665,10 +666,10 @@
     };
 
     peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
+      if (event.candidate && currentCallTarget) {
         ipcRenderer.invoke('send-socket-packet', {
           type: 'ice_candidate',
-          from: currentUsername || activeAccount.name,
+          from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
           target: currentCallTarget,
           candidate: event.candidate
         });
@@ -681,7 +682,7 @@
 
     ipcRenderer.invoke('send-socket-packet', {
       type: 'call_answer',
-      from: currentUsername || activeAccount.name,
+      from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
       target: currentCallTarget,
       sdp: answer
     });
@@ -691,7 +692,7 @@
     if (currentCallTarget) {
       ipcRenderer.invoke('send-socket-packet', {
         type: 'reject_call',
-        from: currentUsername || activeAccount.name,
+        from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
         target: currentCallTarget
       });
     }
