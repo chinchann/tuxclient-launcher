@@ -458,6 +458,26 @@
     });
   });
 
+  // Auto-refresh active tab on version or loader change
+  const refreshActiveTabContent = () => {
+    const activeTabBtn = document.querySelector('.nav-btn.active');
+    if (!activeTabBtn) return;
+
+    if (activeTabBtn.id === 'tab-mods-btn') {
+      loadInstalledMods();
+      searchModrinth();
+    } else if (activeTabBtn.id === 'tab-packs-btn') {
+      loadInstalledPacks('resourcepacks');
+      searchPacksModrinth();
+    } else if (activeTabBtn.id === 'tab-shaders-btn') {
+      loadInstalledPacks('shaders');
+      searchShadersModrinth();
+    }
+  };
+
+  document.getElementById('version-select')?.addEventListener('change', refreshActiveTabContent);
+  document.getElementById('loader-select')?.addEventListener('change', refreshActiveTabContent);
+
   // --- CHAT & SOCIAL NETWORK CONTROLS ---
   const chatPanel = document.getElementById('chat-panel');
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
@@ -514,7 +534,6 @@
     let friendCard = document.getElementById(`friend-card-${friendUsername.toLowerCase()}`);
     
     if (friendCard) {
-      // Update existing card status dynamically
       const statusText = friendCard.querySelector('.friend-status-text');
       const callBtn = friendCard.querySelector('.call-btn-action');
       if (statusText) {
@@ -529,7 +548,6 @@
       return;
     }
 
-    // Create new friend card
     friendCard = document.createElement('div');
     friendCard.id = `friend-card-${friendUsername.toLowerCase()}`;
     friendCard.className = 'setting-row';
@@ -596,9 +614,9 @@
     await peerConnection.setLocalDescription(offer);
 
     ipcRenderer.invoke('send-socket-packet', {
-      type: 'call_offer',
+      type: 'start_call',
       from: currentUsername || activeAccount.name,
-      target: currentCallTarget,
+      target: targetUsername,
       sdp: offer
     });
   };
@@ -752,7 +770,6 @@
   ipcRenderer.on('network-packet', async (event, packet) => {
     console.log('[UI] Incoming Network Packet:', packet);
 
-    // Initial Data Load
     if (packet.type === 'initial_data') {
       if (packet.friends && Array.isArray(packet.friends)) {
         packet.friends.forEach(f => renderFriendInList(f));
@@ -784,12 +801,10 @@
       }
     }
 
-    // Dynamic Friend Online/Offline Status Changes
     if (packet.type === 'user_status_change') {
       renderFriendInList({ username: packet.username, status: packet.status });
     }
 
-    // Friend Requests
     if (packet.type === 'friend_request') {
       const requestsList = document.getElementById('friend-requests-list');
       if (requestsList) {
@@ -854,11 +869,14 @@
       }
     }
 
-    // Voice Call Handlers
-    if (packet.type === 'call_offer') {
+    if (packet.type === 'incoming_call' || packet.type === 'start_call') {
       currentCallTarget = packet.from;
       incomingOffer = packet;
       showCallModal(packet.from, "Incoming Voice Call...", false);
+    }
+
+    if (packet.type === 'call_offer') {
+      incomingOffer = packet;
     }
 
     if (packet.type === 'call_answer') {
@@ -1294,7 +1312,7 @@
     const container = document.getElementById('installed-mods-list');
     if (!container) return;
 
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
 
     container.innerHTML = '<p class="subtext">Loading installed mods...</p>';
@@ -1326,22 +1344,23 @@
   }
 
   window.toggleMod = async (fileName, enable) => {
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
     await ipcRenderer.invoke('toggle-mod', { version, loader, fileName, enable });
     loadInstalledMods();
   };
 
   window.deleteMod = async (fileName) => {
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
     await ipcRenderer.invoke('delete-mod', { version, loader, fileName });
     loadInstalledMods();
+    searchModrinth();
   };
 
   window.searchModrinth = async () => {
     const query = document.getElementById('mod-search-input')?.value || '';
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
     const container = document.getElementById('modrinth-search-list');
 
@@ -1349,12 +1368,23 @@
     container.innerHTML = '<p class="subtext">Loading mods...</p>';
 
     try {
+      const installed = await ipcRenderer.invoke('get-installed-mods', { version, loader });
+      const installedNames = (installed || []).map(m => m.name.toLowerCase());
+
       const mods = await ipcRenderer.invoke('search-modrinth', { query, version, loader, projectType: 'mod' });
-      if (!mods || mods.length === 0) {
-        container.innerHTML = `<p class="subtext">No compatible mods found.</p>`;
+
+      const availableMods = (mods || []).filter(m => {
+        const titleLower = m.title.toLowerCase();
+        const slugLower = (m.slug || '').toLowerCase();
+        return !installedNames.some(name => name.includes(titleLower) || titleLower.includes(name) || (slugLower && name.includes(slugLower)));
+      });
+
+      if (availableMods.length === 0) {
+        container.innerHTML = `<p class="subtext">No additional compatible mods found.</p>`;
         return;
       }
-      container.innerHTML = mods.map(m => `
+
+      container.innerHTML = availableMods.map(m => `
         <div class="mod-card">
           <img src="${m.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
           <div class="mod-info" style="flex:1;">
@@ -1370,7 +1400,7 @@
   };
 
   window.installContent = async (projectId, title, projectType) => {
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
 
     try {
@@ -1379,9 +1409,16 @@
 
       await ipcRenderer.invoke('download-content-file', { projectId, version, loader, projectType });
 
-      if (projectType === 'mod') loadInstalledMods();
-      else if (projectType === 'resourcepack') loadInstalledPacks('resourcepacks');
-      else loadInstalledPacks('shaders');
+      if (projectType === 'mod') {
+        loadInstalledMods();
+        searchModrinth();
+      } else if (projectType === 'resourcepack') {
+        loadInstalledPacks('resourcepacks');
+        searchPacksModrinth();
+      } else {
+        loadInstalledPacks('shaders');
+        searchShadersModrinth();
+      }
     } catch (err) {
       alert(`Download failed: ${err.message}`);
       if (progressContainer) progressContainer.classList.add('hidden');
@@ -1393,7 +1430,7 @@
     const container = document.getElementById(typeFolder === 'shaders' ? 'installed-shaders-list' : 'installed-packs-list');
     if (!container) return;
 
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
 
     container.innerHTML = '<p class="subtext">Loading installed items...</p>';
@@ -1417,15 +1454,17 @@
   }
 
   window.deletePack = async (fileName, typeFolder) => {
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
     await ipcRenderer.invoke('delete-pack', { version, loader, type: typeFolder, fileName });
     loadInstalledPacks(typeFolder);
+    if (typeFolder === 'shaders') searchShadersModrinth();
+    else searchPacksModrinth();
   };
 
   window.searchPacksModrinth = async () => {
     const query = document.getElementById('pack-search-input')?.value || '';
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
     const container = document.getElementById('pack-modrinth-list');
 
@@ -1433,12 +1472,22 @@
     container.innerHTML = '<p class="subtext">Loading resource packs...</p>';
 
     try {
+      const installed = await ipcRenderer.invoke('get-installed-packs', { version, loader, type: 'resourcepacks' });
+      const installedNames = (installed || []).map(p => p.name.toLowerCase());
+
       const results = await ipcRenderer.invoke('search-modrinth', { query, version, loader, projectType: 'resourcepack' });
-      if (!results || results.length === 0) {
-        container.innerHTML = `<p class="subtext">No items found.</p>`;
+
+      const availablePacks = (results || []).filter(r => {
+        const titleLower = r.title.toLowerCase();
+        return !installedNames.some(name => name.includes(titleLower) || titleLower.includes(name));
+      });
+
+      if (availablePacks.length === 0) {
+        container.innerHTML = `<p class="subtext">No additional resource packs found.</p>`;
         return;
       }
-      container.innerHTML = results.map(r => `
+
+      container.innerHTML = availablePacks.map(r => `
         <div class="mod-card">
           <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
           <div class="mod-info" style="flex:1;">
@@ -1455,7 +1504,7 @@
 
   window.searchShadersModrinth = async () => {
     const query = document.getElementById('shader-search-input')?.value || '';
-    const version = document.getElementById('version-select')?.value || '1.21';
+    const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
     const container = document.getElementById('shader-modrinth-list');
 
@@ -1463,12 +1512,22 @@
     container.innerHTML = '<p class="subtext">Loading shaders...</p>';
 
     try {
+      const installed = await ipcRenderer.invoke('get-installed-packs', { version, loader, type: 'shaders' });
+      const installedNames = (installed || []).map(p => p.name.toLowerCase());
+
       const results = await ipcRenderer.invoke('search-modrinth', { query, version, loader, projectType: 'shader' });
-      if (!results || results.length === 0) {
-        container.innerHTML = `<p class="subtext">No items found.</p>`;
+
+      const availableShaders = (results || []).filter(r => {
+        const titleLower = r.title.toLowerCase();
+        return !installedNames.some(name => name.includes(titleLower) || titleLower.includes(name));
+      });
+
+      if (availableShaders.length === 0) {
+        container.innerHTML = `<p class="subtext">No additional shader packs found.</p>`;
         return;
       }
-      container.innerHTML = results.map(r => `
+
+      container.innerHTML = availableShaders.map(r => `
         <div class="mod-card">
           <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
           <div class="mod-info" style="flex:1;">
