@@ -438,6 +438,25 @@
   <script>
   const { ipcRenderer } = require('electron');
 
+  // --- NATIVE DESKTOP NOTIFICATION HELPER ---
+  function showDesktopNotification(title, body, iconUrl) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body: body,
+        icon: iconUrl || 'assets/logo.png',
+        silent: false
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        if (title.includes('Message from')) {
+          const sender = title.replace('Message from ', '');
+          openDirectChat(sender);
+        }
+      };
+    }
+  }
+
   // --- 1. ESSENTIAL WINDOW CONTROLS ---
   document.getElementById('win-min')?.addEventListener('click', () => ipcRenderer.send('window-minimize'));
   document.getElementById('win-max')?.addEventListener('click', () => ipcRenderer.send('window-maximize'));
@@ -968,6 +987,15 @@
 
     if (packet.type === 'global_chat') {
       appendChatMessage('chat-messages-container', packet.sender || 'Player', packet.text, packet.timestamp);
+      
+      const myName = currentUsername || (activeAccount ? activeAccount.name : '');
+      if (packet.sender !== myName && chatPanel.classList.contains('hidden')) {
+        showDesktopNotification(
+          `Global Chat: ${packet.sender}`,
+          packet.text,
+          `https://mc-heads.net/avatar/${packet.sender}/64`
+        );
+      }
     }
 
     if (packet.type === 'chat_message') {
@@ -976,6 +1004,14 @@
       
       if (!activeChatHistory[friendKey]) activeChatHistory[friendKey] = [];
       activeChatHistory[friendKey].push({ sender: packet.from, text: packet.text, timestamp: ts });
+
+      if (!currentActivePrivateFriend || currentActivePrivateFriend.toLowerCase() !== packet.from.toLowerCase() || privateChatPanel.classList.contains('hidden')) {
+        showDesktopNotification(
+          `Message from ${packet.from}`,
+          packet.text,
+          `https://mc-heads.net/avatar/${packet.from}/64`
+        );
+      }
 
       if (currentActivePrivateFriend && currentActivePrivateFriend.toLowerCase() === packet.from.toLowerCase()) {
         appendChatMessage('private-chat-messages-container', packet.from, packet.text, ts);
@@ -988,6 +1024,11 @@
       currentCallTarget = packet.from;
       incomingOffer = packet;
       showCallModal(packet.from, "Incoming Voice Call...", false);
+      showDesktopNotification(
+        `Incoming Voice Call`,
+        `${packet.from} is calling you!`,
+        `https://mc-heads.net/avatar/${packet.from}/64`
+      );
     }
 
     if (packet.type === 'call_offer') {
@@ -1313,6 +1354,10 @@
     initializeVersions();
     updateAccountUI();
     setupSkinControls();
+
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
   });
 
   // --- 5. 3D SKIN VIEWER & ANIMATION CONTROLS ---
