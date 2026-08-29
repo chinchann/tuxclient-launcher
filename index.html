@@ -357,7 +357,6 @@
       </div>
     </div>
 
-    <!-- FEATHER-STYLE MOD VERSION SELECTOR SIDEBAR -->
     <div id="mod-details-sidebar" class="chat-panel hidden" style="width: 320px; right: 0; top: 38px; bottom: 28px; height: auto; border-left: 1px solid var(--border-color); border-radius: 0; z-index: 999;">
       <div class="chat-header">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -414,6 +413,7 @@
   </div>
 
   <audio id="remote-audio" autoplay></audio>
+  <audio id="notification-sound" src="https://upload.wikimedia.org/wikipedia/commons/8/84/Notification_sound.mp3" preload="auto"></audio>
 
   <footer class="status-bar">
     <div id="user-card">
@@ -440,11 +440,17 @@
 
   // --- NATIVE DESKTOP NOTIFICATION HELPER ---
   function showDesktopNotification(title, body, iconUrl) {
+    const sound = document.getElementById('notification-sound');
+    if (sound) {
+      sound.currentTime = 0;
+      sound.play().catch(err => console.log("Audio playback deferred:", err));
+    }
+
     if ('Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body: body,
         icon: iconUrl || 'assets/logo.png',
-        silent: false
+        silent: true
       });
 
       notification.onclick = () => {
