@@ -1580,22 +1580,24 @@
 
     try {
       const mods = await ipcRenderer.invoke('get-installed-mods', { version, loader });
-      const userMods = mods ? mods.filter(m => !m.fileName.startsWith('tuxclient-')) : [];
 
-      if (!userMods || userMods.length === 0) {
-        container.innerHTML = `<p class="subtext">No user mods installed for ${version} (${loader}).</p>`;
+      if (!mods || mods.length === 0) {
+        container.innerHTML = `<p class="subtext">No mods installed for ${version} (${loader}).</p>`;
         return;
       }
 
-      container.innerHTML = userMods.map(m => `
+      container.innerHTML = mods.map(m => `
         <div class="mod-card">
-          <div class="mod-info"><strong>${m.name}</strong></div>
+          <div class="mod-info">
+            <strong>${m.name}</strong>
+            ${m.isBundled ? '<span class="badge" style="font-size:9px; background:#a855f7; margin-left:6px;">CLIENT MOD</span>' : ''}
+          </div>
           <div style="display: flex; align-items: center; gap: 10px;">
             <label class="switch" title="Enable / Disable Mod">
               <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName}', this.checked)">
               <span class="slider"></span>
             </label>
-            <button class="delete-icon-btn" onclick="deleteMod('${m.fileName}')" title="Delete Mod">🗑️</button>
+            ${!m.isBundled ? `<button class="delete-icon-btn" onclick="deleteMod('${m.fileName}')" title="Delete Mod">🗑️</button>` : ''}
           </div>
         </div>
       `).join('');

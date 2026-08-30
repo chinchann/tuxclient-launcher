@@ -283,33 +283,35 @@ function ensureBundledMods(modsDir, mcVersion) {
       if (file.endsWith('.jar')) {
         const sourcePath = path.join(sourceBundledDir, file);
         const destPath = path.join(modsDir, file);
+        const disabledPath = path.join(modsDir, file + '.disabled');
 
-        // Inject tuxclient mod strictly when launching 1.21.1
+        // Check if the file already exists in either active or disabled state
+        const alreadyExists = fs.existsSync(destPath) || fs.existsSync(disabledPath);
+
+        // Inject tuxclient mod strictly when launching 1.21.1 if not present
         if (file.toLowerCase().includes('tuxclient')) {
           if (mcVersion === '1.21.1') {
+            if (!alreadyExists) {
+              try {
+                fs.copyFileSync(sourcePath, destPath);
+                console.log(`[TuxLauncher] Injected ${file} into 1.21.1 mods folder.`);
+              } catch (err) {
+                console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
+              }
+            }
+          } else {
+            // Remove tuxclient mod if it exists in any non-1.21.1 version instance
+            if (fs.existsSync(destPath)) try { fs.unlinkSync(destPath); } catch {}
+            if (fs.existsSync(disabledPath)) try { fs.unlinkSync(disabledPath); } catch {}
+          }
+        } else {
+          // Standard utility mods (Fabric API, etc.) sync normally without overwriting state
+          if (!alreadyExists) {
             try {
               fs.copyFileSync(sourcePath, destPath);
-              console.log(`[TuxLauncher] Injected ${file} into 1.21.1 mods folder.`);
             } catch (err) {
               console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
             }
-          } else {
-            // Remove tuxclient mod if it exists in any other version instance
-            if (fs.existsSync(destPath)) {
-              try {
-                fs.unlinkSync(destPath);
-                console.log(`[TuxLauncher] Cleaned ${file} from ${mcVersion} instance.`);
-              } catch (err) {
-                console.error(`[TuxLauncher Error] Failed to purge ${file}:`, err);
-              }
-            }
-          }
-        } else {
-          // Standard utility mods (Fabric API, etc.) sync normally
-          try {
-            fs.copyFileSync(sourcePath, destPath);
-          } catch (err) {
-            console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
           }
         }
       }
@@ -745,18 +747,13 @@ ipcMain.handle('get-installed-mods', async (event, { version = '1.21.1', loader 
   const { modsDir } = getInstancePath(version, loader);
   if (!fs.existsSync(modsDir)) return [];
 
-  const sourceBundledDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets', 'client-mods')
-    : path.join(__dirname, 'assets', 'client-mods');
-
-  const protectedFiles = fs.existsSync(sourceBundledDir) ? fs.readdirSync(sourceBundledDir) : [];
-
   return fs.readdirSync(modsDir)
-    .filter(f => (f.endsWith('.jar') || f.endsWith('.jar.disabled')) && !protectedFiles.includes(f.replace('.disabled', '')))
+    .filter(f => f.endsWith('.jar') || f.endsWith('.jar.disabled'))
     .map(f => ({
       fileName: f, 
       name: f.replace('.disabled', '').replace('.jar', ''), 
-      enabled: !f.endsWith('.disabled')
+      enabled: !f.endsWith('.disabled'),
+      isBundled: f.toLowerCase().includes('tuxclient')
     }));
 });
 
