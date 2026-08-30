@@ -1609,8 +1609,18 @@
   window.toggleMod = async (fileName, enable) => {
     const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    const mainContent = document.querySelector('.main-content');
+    const container = document.getElementById('installed-mods-list');
+
+    const mainScrollTop = mainContent ? mainContent.scrollTop : 0;
+    const containerScrollTop = container ? container.scrollTop : 0;
+
     await ipcRenderer.invoke('toggle-mod', { version, loader, fileName, enable });
-    loadInstalledMods();
+    await loadInstalledMods();
+
+    if (mainContent) mainContent.scrollTop = mainScrollTop;
+    if (container) container.scrollTop = containerScrollTop;
   };
 
   window.deleteMod = async (fileName) => {
