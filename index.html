@@ -642,7 +642,6 @@
     }
   };
 
-  // BUG 1 FIX: Disconnect and prevent initialization when signed out
   async function initBackendNetwork() {
     const friendsContainer = document.getElementById('friends-list-container');
     const requestsContainer = document.getElementById('friend-requests-list');
@@ -719,7 +718,7 @@
     friendsContainer.appendChild(friendCard);
   }
 
-  // --- WEBRTC VOICE CALL ENGINE ---
+  // --- WEBRTC VOICE CALL ENGINE (FIXED SIGNALING) ---
   let peerConnection = null;
   let localStream = null;
   let currentCallTarget = null;
@@ -737,7 +736,7 @@
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     } catch (err) {
       alert("Microphone access denied or not found.");
-      hideCallModal();
+      endCall(false);
       return;
     }
 
@@ -759,15 +758,20 @@
       }
     };
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+    try {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
 
-    ipcRenderer.invoke('send-socket-packet', {
-      type: 'start_call',
-      from: currentUsername || (activeAccount ? activeAccount.name : ''),
-      target: targetUsername,
-      sdp: offer
-    });
+      ipcRenderer.invoke('send-socket-packet', {
+        type: 'start_call',
+        from: currentUsername || (activeAccount ? activeAccount.name : ''),
+        target: targetUsername,
+        sdp: offer
+      });
+    } catch (err) {
+      console.error("[Call Error] Failed to create offer:", err);
+      endCall(false);
+    }
   };
 
   document.getElementById('accept-call-btn')?.addEventListener('click', async () => {
@@ -781,7 +785,7 @@
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     } catch (err) {
       alert("Microphone required to join the call.");
-      endCall();
+      endCall(true);
       return;
     }
 
@@ -816,17 +820,18 @@
   });
 
   document.getElementById('reject-call-btn')?.addEventListener('click', () => {
-    if (currentCallTarget) {
+    endCall(true);
+  });
+
+  function endCall(sendRejectSignal = false) {
+    if (sendRejectSignal && currentCallTarget) {
       ipcRenderer.invoke('send-socket-packet', {
         type: 'reject_call',
         from: currentUsername || (activeAccount ? activeAccount.name : ''),
         target: currentCallTarget
       });
     }
-    endCall();
-  });
 
-  function endCall() {
     if (peerConnection) {
       peerConnection.close();
       peerConnection = null;
@@ -1043,7 +1048,6 @@
       }
     }
 
-    // BUG 3 FIX: Robust Call Signal Listener Routing
     if (packet.type === 'incoming_call' || packet.type === 'start_call') {
       const targetName = (packet.target || packet.recipient || '').toLowerCase().trim();
       if (targetName && myUsername && targetName !== myUsername) return;
@@ -1077,7 +1081,7 @@
 
     if (packet.type === 'reject_call' || packet.type === 'end_call') {
       if (packet.from && currentCallTarget && packet.from.toLowerCase() === currentCallTarget.toLowerCase()) {
-        endCall();
+        endCall(false);
       }
     }
   });
@@ -1514,7 +1518,6 @@
     }
   }
 
-  // BUG 2 FIX: Filter versions strictly to current selected Minecraft version
   window.openModSidebar = async (projectId, modTitle, modIcon, modAuthor) => {
     const sidebar = document.getElementById('mod-details-sidebar');
     const titleEl = document.getElementById('sidebar-mod-title');
@@ -1683,10 +1686,12 @@
 
       container.innerHTML = availableMods.map(m => `
         <div class="mod-card" style="cursor: pointer;" onclick="openModSidebar('${m.project_id}', '${m.title.replace(/'/g, "\\'")}', '${m.icon_url}', '${(m.author || '').replace(/'/g, "\\'")}')">
-          <img src="${m.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
-          <div class="mod-info">
-            <strong>${m.title}</strong>
-            <p class="subtext">${m.description ? m.description.substring(0, 50) : ''}...</p>
+          <div class="mod-card-content">
+            <img class="mod-card-icon" src="${m.icon_url || 'assets/logo.png'}">
+            <div class="mod-info">
+              <strong>${m.title}</strong>
+              <p class="subtext">${m.description ? m.description.substring(0, 50) : ''}...</p>
+            </div>
           </div>
           <button class="download-btn" onclick="event.stopPropagation(); openModSidebar('${m.project_id}', '${m.title.replace(/'/g, "\\'")}', '${m.icon_url}', '${(m.author || '').replace(/'/g, "\\'")}')">Versions</button>
         </div>
@@ -1786,10 +1791,12 @@
 
       container.innerHTML = availablePacks.map(r => `
         <div class="mod-card">
-          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
-          <div class="mod-info">
-            <strong>${r.title}</strong>
-            <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
+          <div class="mod-card-content">
+            <img class="mod-card-icon" src="${r.icon_url || 'assets/logo.png'}">
+            <div class="mod-info">
+              <strong>${r.title}</strong>
+              <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
+            </div>
           </div>
           <button class="download-btn" onclick="installContent('${r.project_id}', '${r.title.replace(/'/g, "\\'")}', 'resourcepack')">Install</button>
         </div>
@@ -1826,10 +1833,12 @@
 
       container.innerHTML = availableShaders.map(r => `
         <div class="mod-card">
-          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
-          <div class="mod-info">
-            <strong>${r.title}</strong>
-            <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
+          <div class="mod-card-content">
+            <img class="mod-card-icon" src="${r.icon_url || 'assets/logo.png'}">
+            <div class="mod-info">
+              <strong>${r.title}</strong>
+              <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
+            </div>
           </div>
           <button class="download-btn" onclick="installContent('${r.project_id}', '${r.title.replace(/'/g, "\\'")}', 'shader')">Install</button>
         </div>
