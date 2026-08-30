@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const WebSocket = require('ws');
+const RPC = require('discord-rpc');
 const { execSync } = require('child_process');
 const { Client } = require('minecraft-launcher-core');
 const { Auth } = require('msmc');
@@ -13,6 +14,39 @@ let mainWindow;
 let logConsoleWindow = null;
 const launcher = new Client();
 const authManager = new Auth("select_account");
+
+// --- DISCORD RICH PRESENCE SETUP ---
+const DISCORD_CLIENT_ID = '1543527706875138108'; // Replace with your Application ID
+let rpc = null;
+
+function initDiscordRPC() {
+  rpc = new RPC.Client({ transport: 'ipc' });
+
+  rpc.on('ready', () => {
+    console.log('[Discord RPC] Rich Presence connected successfully!');
+    setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
+  });
+
+  rpc.login({ clientId: DISCORD_CLIENT_ID }).catch(err => {
+    console.error('[Discord RPC Error]:', err.message);
+  });
+}
+
+function setLauncherActivity(details, state) {
+  if (!rpc) return;
+  try {
+    rpc.setActivity({
+      details: details,
+      state: state,
+      startTimestamp: Date.now(),
+      largeImageKey: 'logo', // Key name configured in Dev Portal > Rich Presence > Art Assets
+      largeImageText: 'TuxClient Launcher',
+      instance: false,
+    });
+  } catch (err) {
+    console.error('[Discord RPC Activity Error]:', err.message);
+  }
+}
 
 // Tracks current user identity for socket authentication and logout broadcast
 let currentActiveUsername = null;
@@ -347,7 +381,11 @@ function createWindow() {
     frame: false,
     resizable: true,
     backgroundColor: '#0D0D11',
-    webPreferences: { nodeIntegration: true, contextIsolation: false }
+    webPreferences: { 
+      nodeIntegration: true, 
+      contextIsolation: false,
+      autoplayPolicy: 'no-user-gesture-required' // Allow sound effects and notification alerts to auto-play
+    }
   });
 
   mainWindow.loadFile('index.html').catch(err => {
@@ -387,7 +425,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.tuxclient.launcher'); // Register Windows Action Center notifications
+  }
+
   createWindow();
+  initDiscordRPC(); // Initialize Discord Rich Presence
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -592,6 +635,9 @@ ipcMain.on('launch-game', async (event, config) => {
   createTuxConsoleWindow();
   sendConsoleLog('info', `[TuxLauncher] Initializing launch routine for Minecraft ${selectedVersion}...`);
 
+  // Update Discord status to indicate launching game
+  setLauncherActivity(`Playing Minecraft ${selectedVersion}`, `Loader: ${selectedLoader.toUpperCase()}`);
+
   try {
     // Determine required Java major version based on selected MC version
     const versionNum = parseFloat(selectedVersion);
@@ -679,12 +725,18 @@ ipcMain.on('launch-game', async (event, config) => {
     launcher.on('close', (code) => {
       sendConsoleLog('info', `[TuxLauncher] Process exited with code ${code}`);
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', code === 0 ? 'Ready' : `Crashed (Exit code: ${code})`);
+      
+      // Revert Discord status back to launcher idle
+      setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
     });
 
     await launcher.launch(opts);
   } catch (err) {
     sendConsoleLog('error', `[CRASH EXCEPTION] ${err.stack || err.message}`);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', `Error: ${err.message}`);
+    
+    // Revert Discord status on crash
+    setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
   }
 });
 

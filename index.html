@@ -905,6 +905,8 @@
   ipcRenderer.on('network-packet', async (event, packet) => {
     console.log('[UI] Incoming Network Packet:', packet);
 
+    const myUsername = (currentUsername || (activeAccount ? activeAccount.name : '')).toLowerCase();
+
     if (packet.type === 'initial_data') {
       if (packet.friends && Array.isArray(packet.friends)) {
         packet.friends.forEach(f => renderFriendInList(f));
@@ -1027,6 +1029,9 @@
     }
 
     if (packet.type === 'incoming_call' || packet.type === 'start_call') {
+      const targetName = (packet.target || '').toLowerCase();
+      if (targetName && myUsername && targetName !== myUsername) return;
+
       currentCallTarget = packet.from;
       incomingOffer = packet;
       showCallModal(packet.from, "Incoming Voice Call...", false);
@@ -1055,7 +1060,9 @@
     }
 
     if (packet.type === 'reject_call' || packet.type === 'end_call') {
-      endCall();
+      if (packet.from && currentCallTarget && packet.from.toLowerCase() === currentCallTarget.toLowerCase()) {
+        endCall();
+      }
     }
   });
 
