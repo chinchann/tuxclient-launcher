@@ -71,14 +71,14 @@
           <div class="settings-card">
             <h3>Active Account</h3>
             <div id="active-account-display" class="setting-row">
-              <div class="profile-info" style="display: flex; align-items: center; gap: 12px;">
-                <img id="active-profile-avatar" src="https://mc-heads.net/avatar/MSTEVE/32" width="32" height="32" alt="Avatar" style="border-radius: 4px;">
-                <div class="setting-info">
+              <div class="profile-info" style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                <img id="active-profile-avatar" src="https://mc-heads.net/avatar/MSTEVE/32" width="32" height="32" alt="Avatar" style="border-radius: 4px; flex-shrink: 0;">
+                <div class="setting-info" style="min-width: 0;">
                   <label id="active-profile-name">Not Signed In</label>
                   <span class="subtext" id="active-profile-uuid">No active session</span>
                 </div>
               </div>
-              <button id="signout-btn" class="secondary-btn close-btn-style hidden">Sign Out</button>
+              <button id="signout-btn" class="secondary-btn close-btn-style hidden" style="flex-shrink: 0;">Sign Out</button>
             </div>
           </div>
 
@@ -120,7 +120,7 @@
           <div class="settings-card">
             <h3>My Friends</h3>
             <div id="friends-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
-              <p class="subtext">You haven't added any friends yet.</p>
+              <p class="subtext">Sign in to see your friends.</p>
             </div>
           </div>
         </div>
@@ -359,18 +359,18 @@
 
     <div id="mod-details-sidebar" class="chat-panel hidden" style="width: 320px; right: 0; top: 38px; bottom: 28px; height: auto; border-left: 1px solid var(--border-color); border-radius: 0; z-index: 999;">
       <div class="chat-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <img id="sidebar-mod-icon" src="assets/logo.png" width="24" height="24" style="border-radius: 4px;">
-          <h3 id="sidebar-mod-title" style="font-size: 14px; margin: 0;">Mod Name</h3>
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <img id="sidebar-mod-icon" src="assets/logo.png" width="24" height="24" style="border-radius: 4px; flex-shrink: 0;">
+          <h3 id="sidebar-mod-title" style="font-size: 14px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Mod Name</h3>
         </div>
-        <button onclick="closeModSidebar()" class="secondary-btn close-btn-style" style="padding: 4px 8px; font-size: 10px;">✕</button>
+        <button onclick="closeModSidebar()" class="secondary-btn close-btn-style" style="padding: 4px 8px; font-size: 10px; flex-shrink: 0;">✕</button>
       </div>
 
       <div style="padding: 12px; overflow-y: auto; height: calc(100% - 50px);">
         <p id="sidebar-mod-author" class="subtext" style="margin-top: 0;">by Author</p>
 
         <div style="margin-top: 16px;">
-          <h4 style="font-size: 12px; color: #a855f7; margin-bottom: 8px; letter-spacing: 0.5px;">AVAILABLE VERSIONS</h4>
+          <h4 id="sidebar-version-header" style="font-size: 12px; color: #a855f7; margin-bottom: 8px; letter-spacing: 0.5px;">AVAILABLE VERSIONS</h4>
           <div id="sidebar-version-list" style="display: flex; flex-direction: column; gap: 8px;">
             <p class="subtext">Loading version history...</p>
           </div>
@@ -642,8 +642,23 @@
     }
   };
 
+  // BUG 1 FIX: Disconnect and prevent initialization when signed out
   async function initBackendNetwork() {
-    const activeUser = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const friendsContainer = document.getElementById('friends-list-container');
+    const requestsContainer = document.getElementById('friend-requests-list');
+
+    if (!activeAccount && !currentUsername) {
+      console.log("[UI] No active account logged in. Skipping WebSocket connection.");
+      if (friendsContainer) {
+        friendsContainer.innerHTML = '<p class="subtext">Sign in to see your friends.</p>';
+      }
+      if (requestsContainer) {
+        requestsContainer.innerHTML = '<p class="subtext">No pending requests.</p>';
+      }
+      return;
+    }
+
+    const activeUser = currentUsername || activeAccount.name;
     console.log(`[UI] Initializing WebSocket backend connection as: ${activeUser}`);
     const res = await ipcRenderer.invoke('init-global-chat', activeUser);
     if (res.success) {
@@ -654,7 +669,7 @@
   // RENDER FRIEND CARD IN MY FRIENDS LIST
   function renderFriendInList(friendData) {
     const friendsContainer = document.getElementById('friends-list-container');
-    if (!friendsContainer) return;
+    if (!friendsContainer || (!activeAccount && !currentUsername)) return;
 
     if (friendsContainer.querySelector('.subtext')) {
       friendsContainer.innerHTML = '';
@@ -685,17 +700,17 @@
     friendCard = document.createElement('div');
     friendCard.id = `friend-card-${friendUsername.toLowerCase()}`;
     friendCard.className = 'setting-row';
-    friendCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+    friendCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
     friendCard.innerHTML = `
-      <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
-        <img src="https://mc-heads.net/avatar/${friendUsername}/32" width="32" height="32" style="border-radius: 4px;">
-        <div class="setting-info">
-          <label><strong>${friendUsername}</strong></label>
+      <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+        <img src="https://mc-heads.net/avatar/${friendUsername}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+        <div class="setting-info" style="min-width: 0;">
+          <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${friendUsername}</strong></label>
           <span class="subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}">${offlineText}</span>
         </div>
       </div>
-      <div>
-        <button class="secondary-btn call-btn-action" style="background: #a855f7; color: white; margin-right: 6px; display: inline-flex; align-items: center; gap: 6px; ${!isOnline ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${!isOnline ? 'disabled' : ''} onclick="startVoiceCall('${friendUsername}')">
+      <div style="flex-shrink: 0; display: flex; gap: 6px;">
+        <button class="secondary-btn call-btn-action" style="background: #a855f7; color: white; display: inline-flex; align-items: center; gap: 6px; ${!isOnline ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${!isOnline ? 'disabled' : ''} onclick="startVoiceCall('${friendUsername}')">
           <img src="assets/calling.png" width="14" height="14" alt="Call"> Call
         </button>
         <button class="secondary-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
@@ -737,7 +752,7 @@
       if (event.candidate && currentCallTarget) {
         ipcRenderer.invoke('send-socket-packet', {
           type: 'ice_candidate',
-          from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
+          from: currentUsername || (activeAccount ? activeAccount.name : ''),
           target: currentCallTarget,
           candidate: event.candidate
         });
@@ -749,7 +764,7 @@
 
     ipcRenderer.invoke('send-socket-packet', {
       type: 'start_call',
-      from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
+      from: currentUsername || (activeAccount ? activeAccount.name : ''),
       target: targetUsername,
       sdp: offer
     });
@@ -781,7 +796,7 @@
       if (event.candidate && currentCallTarget) {
         ipcRenderer.invoke('send-socket-packet', {
           type: 'ice_candidate',
-          from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
+          from: currentUsername || (activeAccount ? activeAccount.name : ''),
           target: currentCallTarget,
           candidate: event.candidate
         });
@@ -794,7 +809,7 @@
 
     ipcRenderer.invoke('send-socket-packet', {
       type: 'call_answer',
-      from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
+      from: currentUsername || (activeAccount ? activeAccount.name : ''),
       target: currentCallTarget,
       sdp: answer
     });
@@ -804,7 +819,7 @@
     if (currentCallTarget) {
       ipcRenderer.invoke('send-socket-packet', {
         type: 'reject_call',
-        from: currentUsername || (activeAccount ? activeAccount.name : '_Graptor_'),
+        from: currentUsername || (activeAccount ? activeAccount.name : ''),
         target: currentCallTarget
       });
     }
@@ -905,7 +920,7 @@
   ipcRenderer.on('network-packet', async (event, packet) => {
     console.log('[UI] Incoming Network Packet:', packet);
 
-    const myUsername = (currentUsername || (activeAccount ? activeAccount.name : '')).toLowerCase();
+    const myUsername = (currentUsername || (activeAccount ? activeAccount.name : '')).toLowerCase().trim();
 
     if (packet.type === 'initial_data') {
       if (packet.friends && Array.isArray(packet.friends)) {
@@ -918,16 +933,16 @@
           packet.pendingRequests.forEach(requester => {
             const reqCard = document.createElement('div');
             reqCard.className = 'setting-row';
-            reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+            reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
             reqCard.innerHTML = `
-              <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
-                <img src="https://mc-heads.net/avatar/${requester}/32" width="32" height="32" style="border-radius: 4px;">
-                <div class="setting-info">
-                  <label><strong>${requester}</strong></label>
+              <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <img src="https://mc-heads.net/avatar/${requester}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+                <div class="setting-info" style="min-width: 0;">
+                  <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${requester}</strong></label>
                   <span class="subtext">Wants to be your friend</span>
                 </div>
               </div>
-              <div style="display: flex; gap: 6px;">
+              <div style="display: flex; gap: 6px; flex-shrink: 0;">
                 <button class="download-btn" onclick="respondFriendRequest('${requester}', 'accept', this)">Accept</button>
                 <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${requester}', 'decline', this)">Decline</button>
               </div>
@@ -970,16 +985,16 @@
 
         const reqCard = document.createElement('div');
         reqCard.className = 'setting-row';
-        reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+        reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
         reqCard.innerHTML = `
-          <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
-            <img src="https://mc-heads.net/avatar/${packet.from}/32" width="32" height="32" style="border-radius: 4px;">
-            <div class="setting-info">
-              <label><strong>${packet.from}</strong></label>
+          <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <img src="https://mc-heads.net/avatar/${packet.from}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+            <div class="setting-info" style="min-width: 0;">
+              <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${packet.from}</strong></label>
               <span class="subtext">Wants to be your friend</span>
             </div>
           </div>
-          <div style="display: flex; gap: 6px;">
+          <div style="display: flex; gap: 6px; flex-shrink: 0;">
             <button class="download-btn" onclick="respondFriendRequest('${packet.from}', 'accept', this)">Accept</button>
             <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${packet.from}', 'decline', this)">Decline</button>
           </div>
@@ -1028,8 +1043,9 @@
       }
     }
 
+    // BUG 3 FIX: Robust Call Signal Listener Routing
     if (packet.type === 'incoming_call' || packet.type === 'start_call') {
-      const targetName = (packet.target || '').toLowerCase();
+      const targetName = (packet.target || packet.recipient || '').toLowerCase().trim();
       if (targetName && myUsername && targetName !== myUsername) return;
 
       currentCallTarget = packet.from;
@@ -1069,7 +1085,12 @@
   window.sendFriendRequest = async () => {
     const input = document.getElementById('add-friend-input');
     const targetUsername = input ? input.value.trim() : '';
-    const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '');
+
+    if (!senderUsername) {
+      alert('You must be signed in to send friend requests.');
+      return;
+    }
 
     if (!targetUsername) {
       alert('Please enter a username.');
@@ -1090,7 +1111,7 @@
   };
 
   window.respondFriendRequest = async (targetUsername, action, btnElement) => {
-    const currentUser = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
     const result = await ipcRenderer.invoke('respond-friend-request', {
       targetUsername: targetUsername,
       action: action,
@@ -1112,7 +1133,12 @@
     if (!input || !input.value.trim()) return;
 
     const content = input.value.trim();
-    const sender = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const sender = currentUsername || (activeAccount ? activeAccount.name : '');
+
+    if (!sender) {
+      alert("Sign in to send messages.");
+      return;
+    }
 
     ipcRenderer.invoke('send-global-message', { sender: sender, text: content });
     input.value = '';
@@ -1123,8 +1149,13 @@
     if (!input || !input.value.trim() || !currentActivePrivateFriend) return;
 
     const content = input.value.trim();
-    const sender = currentUsername || (activeAccount ? activeAccount.name : '_Graptor_');
+    const sender = currentUsername || (activeAccount ? activeAccount.name : '');
     const timestamp = Date.now();
+
+    if (!sender) {
+      alert("Sign in to send messages.");
+      return;
+    }
 
     ipcRenderer.invoke('send-socket-packet', {
       type: 'chat_message',
@@ -1258,15 +1289,15 @@
         accountsList.innerHTML = savedAccounts.map(acc => {
           const isActive = activeAccount && activeAccount.uuid === acc.uuid;
           return `
-            <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px;">
-              <div class="profile-info" style="display: flex; align-items: center; gap: 10px;">
-                <img src="https://mc-heads.net/avatar/${acc.uuid}/32" width="32" height="32" style="border-radius: 4px;">
-                <div class="setting-info">
-                  <label>${acc.name} ${isActive ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #a855f7;">ACTIVE</span>' : ''}</label>
+            <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; box-sizing: border-box; width: 100%;">
+              <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <img src="https://mc-heads.net/avatar/${acc.uuid}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+                <div class="setting-info" style="min-width: 0;">
+                  <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${acc.name} ${isActive ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #a855f7;">ACTIVE</span>' : ''}</label>
                   <span class="subtext">${acc.uuid.substring(0, 18)}...</span>
                 </div>
               </div>
-              <div>
+              <div style="flex-shrink: 0;">
                 ${!isActive ? `<button class="secondary-btn" onclick="selectAccount('${acc.uuid}')">Use Account</button>` : ''}
                 <button class="secondary-btn close-btn-style" style="margin-left: 6px;" onclick="removeAccount('${acc.uuid}')">Remove</button>
               </div>
@@ -1483,13 +1514,14 @@
     }
   }
 
-  // --- MOD VERSION SELECTOR SIDEBAR LOGIC ---
+  // BUG 2 FIX: Filter versions strictly to current selected Minecraft version
   window.openModSidebar = async (projectId, modTitle, modIcon, modAuthor) => {
     const sidebar = document.getElementById('mod-details-sidebar');
     const titleEl = document.getElementById('sidebar-mod-title');
     const iconEl = document.getElementById('sidebar-mod-icon');
     const authorEl = document.getElementById('sidebar-mod-author');
     const listEl = document.getElementById('sidebar-version-list');
+    const headerEl = document.getElementById('sidebar-version-header');
 
     if (!sidebar) return;
 
@@ -1500,48 +1532,40 @@
 
     sidebar.classList.remove('hidden');
 
-    try {
-      const currentMcVersion = document.getElementById('version-select')?.value || '1.21.1';
-      const currentLoader = document.getElementById('loader-select')?.value || 'fabric';
+    const currentMcVersion = document.getElementById('version-select')?.value || '1.21.1';
+    const currentLoader = document.getElementById('loader-select')?.value || 'fabric';
 
-      const versionsRes = await fetch(`https://api.modrinth.com/v2/project/${projectId}/version`);
+    if (headerEl) {
+      headerEl.innerText = `AVAILABLE VERSIONS (${currentMcVersion})`;
+    }
+
+    try {
+      const url = `https://api.modrinth.com/v2/project/${projectId}/version?game_versions=["${encodeURIComponent(currentMcVersion)}"]&loaders=["${encodeURIComponent(currentLoader.toLowerCase())}"]`;
+      const versionsRes = await fetch(url);
       const versions = await versionsRes.json();
 
-      const validVersions = versions.filter(v => v.loaders.includes(currentLoader.toLowerCase()));
+      const validVersions = versions.filter(v => 
+        v.loaders.includes(currentLoader.toLowerCase()) &&
+        v.game_versions.includes(currentMcVersion)
+      );
 
       if (!validVersions || validVersions.length === 0) {
-        listEl.innerHTML = '<p class="subtext">No versions found for selected loader.</p>';
+        listEl.innerHTML = `<p class="subtext">No versions found for Minecraft ${currentMcVersion} (${currentLoader}).</p>`;
         return;
       }
 
-      const grouped = {};
-      validVersions.forEach(v => {
-        v.game_versions.forEach(gv => {
-          if (!grouped[gv]) grouped[gv] = [];
-          grouped[gv].push(v);
-        });
-      });
-
-      listEl.innerHTML = Object.keys(grouped).map(mcVer => {
-        const isCurrentMc = mcVer === currentMcVersion;
-        const verOptions = grouped[mcVer].map(v => `
-          <option value="${v.id}">${v.version_number} (${v.version_type})</option>
-        `).join('');
-
-        return `
-          <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; ${isCurrentMc ? 'border: 1px solid #a855f7;' : ''}">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <strong style="font-size: 12px;">${mcVer} ${isCurrentMc ? '<span class="badge" style="background:#a855f7; font-size:9px;">ACTIVE</span>' : ''}</strong>
-              <button class="download-btn" style="padding: 4px 8px; font-size: 11px;" onclick="installSpecificVersion('${projectId}', '${modTitle.replace(/'/g, "\\'")}', document.getElementById('ver-select-${mcVer.replace(/\./g, '-')}').value, '${mcVer}')">Install</button>
-            </div>
-            <select id="ver-select-${mcVer.replace(/\./g, '-')}" style="width: 100%; font-size: 11px; padding: 4px; background: #0D0D11; color: #fff; border: 1px solid #1E1E2A; border-radius: 4px;">
-              ${verOptions}
-            </select>
+      listEl.innerHTML = validVersions.map((v, idx) => `
+        <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; box-sizing: border-box; width: 100%;">
+          <div style="min-width: 0; flex: 1;">
+            <strong style="font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${v.version_number}</strong>
+            <span class="subtext" style="font-size: 10px;">${v.version_type} ${idx === 0 ? '<span class="badge" style="background:#a855f7; font-size:8px; padding: 2px 4px;">ACTIVE</span>' : ''}</span>
           </div>
-        `;
-      }).join('');
+          <button class="download-btn" style="padding: 4px 8px; font-size: 11px; flex-shrink: 0;" onclick="installSpecificVersion('${projectId}', '${modTitle.replace(/'/g, "\\'")}', '${v.id}', '${currentMcVersion}')">Install</button>
+        </div>
+      `).join('');
 
     } catch (err) {
+      console.error("Error fetching mod versions:", err);
       listEl.innerHTML = '<p class="subtext">Failed to fetch mod versions.</p>';
     }
   };
@@ -1589,10 +1613,10 @@
       container.innerHTML = mods.map(m => `
         <div class="mod-card">
           <div class="mod-info">
-            <strong>${m.name}</strong>
-            ${m.isBundled ? '<span class="badge" style="font-size:9px; background:#a855f7; margin-left:6px;">CLIENT MOD</span>' : ''}
+            <strong title="${m.name}">${m.name}</strong>
+            ${m.isBundled ? '<span class="badge" style="font-size:9px; background:#a855f7; margin-top:2px;">CLIENT MOD</span>' : ''}
           </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="mod-actions">
             <label class="switch" title="Enable / Disable Mod">
               <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName}', this.checked)">
               <span class="slider"></span>
@@ -1659,8 +1683,8 @@
 
       container.innerHTML = availableMods.map(m => `
         <div class="mod-card" style="cursor: pointer;" onclick="openModSidebar('${m.project_id}', '${m.title.replace(/'/g, "\\'")}', '${m.icon_url}', '${(m.author || '').replace(/'/g, "\\'")}')">
-          <img src="${m.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
-          <div class="mod-info" style="flex:1;">
+          <img src="${m.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+          <div class="mod-info">
             <strong>${m.title}</strong>
             <p class="subtext">${m.description ? m.description.substring(0, 50) : ''}...</p>
           </div>
@@ -1762,8 +1786,8 @@
 
       container.innerHTML = availablePacks.map(r => `
         <div class="mod-card">
-          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
-          <div class="mod-info" style="flex:1;">
+          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+          <div class="mod-info">
             <strong>${r.title}</strong>
             <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
           </div>
@@ -1802,8 +1826,8 @@
 
       container.innerHTML = availableShaders.map(r => `
         <div class="mod-card">
-          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px;">
-          <div class="mod-info" style="flex:1;">
+          <img src="${r.icon_url || 'assets/logo.png'}" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+          <div class="mod-info">
             <strong>${r.title}</strong>
             <p class="subtext">${r.description ? r.description.substring(0, 60) : ''}...</p>
           </div>

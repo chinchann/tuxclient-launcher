@@ -10,6 +10,9 @@ const { execSync } = require('child_process');
 const { Client } = require('minecraft-launcher-core');
 const { Auth } = require('msmc');
 
+// Bypass self-signed certificate rejections on restricted networks
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 let mainWindow;
 let logConsoleWindow = null;
 const launcher = new Client();
@@ -39,7 +42,7 @@ function setLauncherActivity(details, state) {
       details: details,
       state: state,
       startTimestamp: Date.now(),
-      largeImageKey: 'logo', // Key name configured in Dev Portal > Rich Presence > Art Assets
+      largeImageKey: 'logo',
       largeImageText: 'TuxClient Launcher',
       instance: false,
     });
@@ -61,7 +64,7 @@ autoUpdater.autoInstallOnAppQuit = true;
 const SERVER_WS_URL = "wss://tuxclient-backend.onrender.com";
 const TUX_ROOT = path.join(app.getPath('appData'), '.tuxclient');
 
-// --- AUTO-UPDATER EVENTS (CUSTOM IPC MODAL & LOGS) ---
+// --- AUTO-UPDATER EVENTS ---
 autoUpdater.on('checking-for-update', () => {
   console.log('[AutoUpdater] Checking for updates...');
   sendConsoleLog('info', '[AutoUpdater] Checking for available client updates...');
@@ -102,7 +105,6 @@ autoUpdater.on('error', (err) => {
   sendConsoleLog('error', `[AutoUpdater Error] ${err.message || err}`);
 });
 
-// IPC listeners receiving actions from custom HTML modal buttons
 ipcMain.on('check-for-updates', () => {
   if (app.isPackaged) {
     autoUpdater.checkForUpdates();
@@ -213,6 +215,64 @@ function sendConsoleLog(type, message) {
   }
 }
 
+/**
+ * BUG 4 FIX: Validates file integrity across libraries, assets, and versions.
+ * Checks for 0-byte files, invalid/empty JSON, and corrupt JARs (ZIP header check).
+ */
+function sanitizeAndValidateInstanceFiles(dirPath) {
+  if (!fs.existsSync(dirPath)) return;
+
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      sanitizeAndValidateInstanceFiles(fullPath);
+    } else if (entry.isFile()) {
+      try {
+        const stats = fs.statSync(fullPath);
+
+        // 1. Check for 0-byte empty files
+        if (stats.size === 0) {
+          console.warn(`[TuxFix] Deleting 0-byte corrupted file: ${fullPath}`);
+          fs.unlinkSync(fullPath);
+          continue;
+        }
+
+        // 2. Validate JSON file structural integrity
+        if (entry.name.endsWith('.json')) {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            JSON.parse(content);
+          } catch (jsonErr) {
+            console.warn(`[TuxFix] Deleting malformed JSON file: ${fullPath}`);
+            fs.unlinkSync(fullPath);
+            continue;
+          }
+        }
+
+        // 3. Validate JAR archive integrity (Check for 'PK' ZIP signature bytes)
+        if (entry.name.endsWith('.jar')) {
+          const buffer = Buffer.alloc(4);
+          const fd = fs.openSync(fullPath, 'r');
+          fs.readSync(fd, buffer, 0, 4, 0);
+          fs.closeSync(fd);
+
+          // ZIP header signature: 0x50 0x4B 0x03 0x04 ("PK\x03\x04")
+          if (buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
+            console.warn(`[TuxFix] Deleting corrupted JAR archive (bad header): ${fullPath}`);
+            fs.unlinkSync(fullPath);
+            continue;
+          }
+        }
+      } catch (err) {
+        console.error(`[TuxFix] Error inspecting ${fullPath}, removing:`, err);
+        try { fs.unlinkSync(fullPath); } catch (e) {}
+      }
+    }
+  }
+}
+
 // --- DYNAMIC VERSION-AWARE JAVA FINDER AND DOWNLOADER ---
 function findJavaExecutable(dir, targetExe = 'java.exe') {
   if (!fs.existsSync(dir)) return null;
@@ -242,7 +302,6 @@ async function ensurePortableJava(event, requiredMajorVersion = 21) {
 
   const zipPath = path.join(javaDir, `jre${requiredMajorVersion}.zip`);
   
-  // Use JRE 25 link for 26.2+, JRE 21 link for 1.20.x - 1.21.x
   const javaUrl = requiredMajorVersion >= 25
     ? "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25%2B36/OpenJDK25U-jre_x64_windows_hotspot_25_36.zip"
     : "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.2%2B13/OpenJDK21U-jre_x64_windows_hotspot_21.0.2_13.zip";
@@ -285,10 +344,8 @@ function ensureBundledMods(modsDir, mcVersion) {
         const destPath = path.join(modsDir, file);
         const disabledPath = path.join(modsDir, file + '.disabled');
 
-        // Check if the file already exists in either active or disabled state
         const alreadyExists = fs.existsSync(destPath) || fs.existsSync(disabledPath);
 
-        // Inject tuxclient mod strictly when launching 1.21.1 if not present
         if (file.toLowerCase().includes('tuxclient')) {
           if (mcVersion === '1.21.1') {
             if (!alreadyExists) {
@@ -300,12 +357,10 @@ function ensureBundledMods(modsDir, mcVersion) {
               }
             }
           } else {
-            // Remove tuxclient mod if it exists in any non-1.21.1 version instance
             if (fs.existsSync(destPath)) try { fs.unlinkSync(destPath); } catch {}
             if (fs.existsSync(disabledPath)) try { fs.unlinkSync(disabledPath); } catch {}
           }
         } else {
-          // Standard utility mods (Fabric API, etc.) sync normally without overwriting state
           if (!alreadyExists) {
             try {
               fs.copyFileSync(sourcePath, destPath);
@@ -332,20 +387,6 @@ function getInstancePath(version = '1.21.1', loader = 'fabric') {
   ensureBundledMods(modsDir, version);
 
   return { instanceDir, modsDir, resourcePacksDir, shaderPacksDir };
-}
-
-function detectJavaPath() {
-  const possiblePaths = [
-    'C:\\Program Files\\Java\\jdk-25\\bin\\java.exe',
-    'C:\\Program Files\\Java\\jdk-21\\bin\\java.exe',
-    'C:\\Program Files\\Eclipse Adoptium\\jdk-21\\bin\\java.exe',
-    'C:\\Program Files\\Microsoft\\jdk-21\\bin\\java.exe',
-    'C:\\Program Files\\Amazon Corretto\\jdk-21\\bin\\java.exe'
-  ];
-  for (const javaPath of possiblePaths) {
-    if (fs.existsSync(javaPath)) return javaPath;
-  }
-  return null;
 }
 
 // --- FABRIC PROFILE GENERATION ---
@@ -386,7 +427,7 @@ function createWindow() {
     webPreferences: { 
       nodeIntegration: true, 
       contextIsolation: false,
-      autoplayPolicy: 'no-user-gesture-required' // Allow sound effects and notification alerts to auto-play
+      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
@@ -394,10 +435,9 @@ function createWindow() {
     console.error("[TuxLauncher Error] Failed to load index.html:", err);
   });
 
-  // --- GRACEFUL DISCONNECT HOOK ON LAUNCHER SHUTDOWN ---
   mainWindow.on('close', (e) => {
     if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
-      e.preventDefault(); // Pause immediate destruction to allow packet transmission
+      e.preventDefault();
 
       console.log(`[TuxLauncher] Transmitting explicit logout frame for user: ${currentActiveUsername}`);
       
@@ -413,12 +453,11 @@ function createWindow() {
       setTimeout(() => {
         try { globalChatSocket.close(); } catch {}
         globalChatSocket = null;
-        mainWindow.destroy(); // Safely destroy window after broadcast
+        mainWindow.destroy();
       }, 150);
     }
   });
 
-  // Check for updates automatically in packaged production builds
   mainWindow.once('ready-to-show', () => {
     if (app.isPackaged) {
       autoUpdater.checkForUpdates();
@@ -428,11 +467,11 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') {
-    app.setAppUserModelId('com.tuxclient.launcher'); // Register Windows Action Center notifications
+    app.setAppUserModelId('com.tuxclient.launcher');
   }
 
   createWindow();
-  initDiscordRPC(); // Initialize Discord Rich Presence
+  initDiscordRPC();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -452,6 +491,7 @@ let globalChatSocket = null;
 let pingInterval = null;
 
 function connectGlobalChat(username) {
+  const normalizedUsername = username.toLowerCase().trim();
   currentActiveUsername = username;
 
   if (globalChatSocket) {
@@ -459,7 +499,7 @@ function connectGlobalChat(username) {
   }
   if (pingInterval) clearInterval(pingInterval);
 
-  const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(username)}`;
+  const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(normalizedUsername)}`;
   console.log(`[TuxLauncher WS] Connecting to Render backend at: ${connectionUrl}`);
 
   globalChatSocket = new WebSocket(connectionUrl);
@@ -470,7 +510,7 @@ function connectGlobalChat(username) {
     const authPacket = {
       type: 'auth',
       username: username,
-      uuid: username
+      uuid: normalizedUsername
     };
     globalChatSocket.send(JSON.stringify(authPacket));
 
@@ -511,7 +551,14 @@ ipcMain.handle('init-global-chat', (event, username) => {
   return { success: false, message: 'Invalid username' };
 });
 
-ipcMain.handle('send-socket-packet', (event, packet) => {
+// BUG 3 FIX: Standardize Socket Signal Forwarding for Calls
+ipcMain.handle('send-socket-packet', async (event, packet) => {
+  if (!packet) return { success: false, message: 'Invalid packet payload' };
+
+  if (packet.target) packet.target = packet.target.toLowerCase().trim();
+  if (packet.recipient) packet.recipient = packet.recipient.toLowerCase().trim();
+  if (packet.from) packet.from = packet.from.trim();
+
   if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
     globalChatSocket.send(JSON.stringify(packet));
     return { success: true };
@@ -546,7 +593,7 @@ ipcMain.handle('send-friend-request', async (event, { targetUsername, senderUser
 
     const packet = {
       type: 'friend_request',
-      target: targetUsername,
+      target: targetUsername.toLowerCase().trim(),
       from: senderUsername
     };
 
@@ -562,7 +609,7 @@ ipcMain.handle('respond-friend-request', async (event, { targetUsername, action,
     if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
       const packet = {
         type: action === 'accept' ? 'friend_accept' : 'friend_decline',
-        target: targetUsername,
+        target: targetUsername.toLowerCase().trim(),
         from: currentUser
       };
       globalChatSocket.send(JSON.stringify(packet));
@@ -633,15 +680,20 @@ ipcMain.on('launch-game', async (event, config) => {
 
   const ramMax = config && config.ram ? `${config.ram}G` : "4000M";
   const { instanceDir } = getInstancePath(selectedVersion, selectedLoader);
+  const gameDir = path.join(app.getPath('appData'), '.minecraft');
 
   createTuxConsoleWindow();
-  sendConsoleLog('info', `[TuxLauncher] Initializing launch routine for Minecraft ${selectedVersion}...`);
+  sendConsoleLog('info', `[TuxLauncher] Validating instance files and initializing launch routine for Minecraft ${selectedVersion}...`);
 
-  // Update Discord status to indicate launching game
+  // BUG 4 FIX: Execute file integrity scanner before initiating launch
+  sanitizeAndValidateInstanceFiles(path.join(gameDir, 'assets'));
+  sanitizeAndValidateInstanceFiles(path.join(gameDir, 'versions'));
+  sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'libraries'));
+  sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'mods'));
+
   setLauncherActivity(`Playing Minecraft ${selectedVersion}`, `Loader: ${selectedLoader.toUpperCase()}`);
 
   try {
-    // Determine required Java major version based on selected MC version
     const versionNum = parseFloat(selectedVersion);
     const requiredJavaVersion = (versionNum >= 25 || selectedVersion.startsWith('26.')) ? 25 : 21;
 
@@ -727,8 +779,6 @@ ipcMain.on('launch-game', async (event, config) => {
     launcher.on('close', (code) => {
       sendConsoleLog('info', `[TuxLauncher] Process exited with code ${code}`);
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', code === 0 ? 'Ready' : `Crashed (Exit code: ${code})`);
-      
-      // Revert Discord status back to launcher idle
       setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
     });
 
@@ -736,8 +786,6 @@ ipcMain.on('launch-game', async (event, config) => {
   } catch (err) {
     sendConsoleLog('error', `[CRASH EXCEPTION] ${err.stack || err.message}`);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', `Error: ${err.message}`);
-    
-    // Revert Discord status on crash
     setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
   }
 });
@@ -814,7 +862,6 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
     throw new Error(`No compatible ${projectType} file found for Minecraft ${version} (${loader}).`);
   }
 
-  // Filter for stable builds first to prevent grabbing broken alpha/beta pre-releases
   const stableVersion = vRes.data.find(v => v.version_type === 'release') || vRes.data[0];
   const fileInfo = stableVersion.files.find(f => f.primary) || stableVersion.files[0];
   const filePath = path.join(targetDir, fileInfo.filename);
@@ -849,7 +896,6 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
   });
 });
 
-// Handler for custom version selection from the sidebar dropdown
 ipcMain.handle('download-content-version-id', async (event, { projectId, versionId, version = '1.21.1', loader = 'fabric' }) => {
   const paths = getInstancePath(version, loader);
   const targetDir = paths.modsDir;
