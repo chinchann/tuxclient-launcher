@@ -19,7 +19,7 @@ const launcher = new Client();
 const authManager = new Auth("select_account");
 
 // --- DISCORD RICH PRESENCE SETUP ---
-const DISCORD_CLIENT_ID = '1543527706875138108'; // Replace with your Application ID
+const DISCORD_CLIENT_ID = '1543527706875138108';
 let rpc = null;
 
 function initDiscordRPC() {
