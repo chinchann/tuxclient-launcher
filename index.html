@@ -412,6 +412,19 @@
     </div>
   </div>
 
+  <!-- SESSION EXPIRED RE-LOGIN MODAL -->
+  <div id="session-expired-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div style="background: #14141F; border: 1px solid #1E1E2A; border-radius: 12px; padding: 28px; width: 380px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div style="background: rgba(239, 68, 68, 0.1); color: #EF4444; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px;">SESSION EXPIRED</div>
+      <h2 style="margin: 0 0 8px 0; color: #fff; font-size: 20px;">Session Expired</h2>
+      <p style="color: #9CA3AF; margin: 0 0 20px 0; font-size: 13px; line-height: 1.5;">Your 90-day login token has expired. Please sign in again with Microsoft to verify your session.</p>
+
+      <div style="display: flex; justify-content: center;">
+        <button id="relogin-modal-btn" class="download-btn" style="background: #a855f7; color: white; padding: 10px 24px; font-weight: bold; width: 100%;">Sign In with Microsoft</button>
+      </div>
+    </div>
+  </div>
+
   <audio id="remote-audio" autoplay></audio>
   <audio id="notification-sound" src="https://upload.wikimedia.org/wikipedia/commons/8/84/Notification_sound.mp3" preload="auto"></audio>
 
@@ -1322,6 +1335,11 @@
   loginBtn?.addEventListener('click', triggerLogin);
   document.getElementById('add-account-btn')?.addEventListener('click', triggerLogin);
 
+  document.getElementById('relogin-modal-btn')?.addEventListener('click', () => {
+    document.getElementById('session-expired-modal')?.classList.add('hidden');
+    triggerLogin();
+  });
+
   ipcRenderer.on('login-success', (event, accountData) => {
     activeAccount = accountData;
     const existingIndex = savedAccounts.findIndex(acc => acc.uuid === accountData.uuid);
@@ -1389,7 +1407,14 @@
         userAuthToken = activeAccount.mclcAuth;
         if (statusText) statusText.innerText = "Status: Session successfully renewed!";
       } else {
-        console.warn("[Auth] Pre-launch refresh failed, using active local session token...");
+        console.warn("[Auth] 90-day token expired or invalid:", refreshResult.message);
+        if (statusText) statusText.innerText = "Status: Session expired. Re-authentication required.";
+        
+        playBtn.disabled = false;
+        playBtn.innerText = "Launch Game";
+        
+        document.getElementById('session-expired-modal')?.classList.remove('hidden');
+        return;
       }
     }
 
