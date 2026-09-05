@@ -45,7 +45,7 @@ function setLauncherActivity(details, state) {
       largeImageKey: 'logo',
       largeImageText: 'TuxClient Launcher',
       instance: false,
-    });
+    }, process.pid); // Binding process.pid prevents Discord from auto-idling
   } catch (err) {
     console.error('[Discord RPC Activity Error]:', err.message);
   }
@@ -773,6 +773,9 @@ ipcMain.on('launch-game', async (event, config) => {
       const str = e ? e.toString().trim() : '';
       if (str) sendConsoleLog('mc', str);
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', 'Launching Minecraft...');
+      
+      // Continuous heartbeat update to prevent Discord process timeout
+      setLauncherActivity(`Playing Minecraft ${selectedVersion}`, `Loader: ${selectedLoader.toUpperCase()}`);
     });
 
     launcher.on('debug', (e) => {
