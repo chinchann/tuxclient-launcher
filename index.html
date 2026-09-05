@@ -1324,7 +1324,10 @@
 
   ipcRenderer.on('login-success', (event, accountData) => {
     activeAccount = accountData;
-    if (!savedAccounts.some(acc => acc.uuid === accountData.uuid)) {
+    const existingIndex = savedAccounts.findIndex(acc => acc.uuid === accountData.uuid);
+    if (existingIndex !== -1) {
+      savedAccounts[existingIndex] = accountData;
+    } else {
       savedAccounts.push(accountData);
     }
     localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
@@ -1362,13 +1365,39 @@
     updateAccountUI();
   };
 
-  playBtn?.addEventListener('click', () => {
-    if (!userAuthToken) return;
+  // --- AUTOMATIC SESSION RENEWAL & LAUNCH ---
+  playBtn?.addEventListener('click', async () => {
+    if (!activeAccount) return;
+
+    playBtn.disabled = true;
+    playBtn.innerText = "AUTHENTICATING...";
+    if (statusText) statusText.innerText = "Status: Validating session token...";
+
+    // 1. SILENT TOKEN REFRESH BEFORE GAME LAUNCH
+    if (activeAccount.refreshToken) {
+      const refreshResult = await ipcRenderer.invoke('refresh-account-session', activeAccount);
+
+      if (refreshResult.success) {
+        activeAccount = refreshResult.account;
+        
+        const accIndex = savedAccounts.findIndex(a => a.uuid === activeAccount.uuid);
+        if (accIndex !== -1) savedAccounts[accIndex] = activeAccount;
+        
+        localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
+        localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
+        
+        userAuthToken = activeAccount.mclcAuth;
+        if (statusText) statusText.innerText = "Status: Session successfully renewed!";
+      } else {
+        console.warn("[Auth] Pre-launch refresh failed, using active local session token...");
+      }
+    }
+
+    // 2. TRIGGER GAME LAUNCH
     const selectedVersion = document.getElementById('version-select').value;
     const selectedLoader = document.getElementById('loader-select').value;
     const ramAllocation = document.getElementById('ram-slider')?.value || 4;
 
-    playBtn.disabled = true;
     playBtn.innerText = "LAUNCHING...";
     if (progressContainer) progressContainer.classList.remove('hidden');
 

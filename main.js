@@ -216,7 +216,7 @@ function sendConsoleLog(type, message) {
 }
 
 /**
- * BUG 4 FIX: Validates file integrity across libraries, assets, and versions.
+ * Validates file integrity across libraries, assets, and versions.
  * Checks for 0-byte files, invalid/empty JSON, and corrupt JARs (ZIP header check).
  */
 function sanitizeAndValidateInstanceFiles(dirPath) {
@@ -551,7 +551,6 @@ ipcMain.handle('init-global-chat', (event, username) => {
   return { success: false, message: 'Invalid username' };
 });
 
-// BUG 3 FIX: Standardize Socket Signal Forwarding for Calls
 ipcMain.handle('send-socket-packet', async (event, packet) => {
   if (!packet) return { success: false, message: 'Invalid packet payload' };
 
@@ -620,7 +619,7 @@ ipcMain.handle('respond-friend-request', async (event, { targetUsername, action,
   }
 });
 
-// --- AUTHENTICATION ---
+// --- AUTHENTICATION & SILENT SESSION REFRESH ---
 ipcMain.on('microsoft-login', async () => {
   try {
     const xboxManager = await authManager.launch("raw");
@@ -629,7 +628,8 @@ ipcMain.on('microsoft-login', async () => {
     const accountData = {
       name: token.profile.name,
       uuid: token.profile.id,
-      mclcAuth: token.mclc()
+      mclcAuth: token.mclc(),
+      refreshToken: xboxManager.msToken?.refresh_token || xboxManager.refreshToken || null
     };
 
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -639,6 +639,33 @@ ipcMain.on('microsoft-login', async () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('login-error', 'Login failed or session expired.');
     }
+  }
+});
+
+ipcMain.handle('refresh-account-session', async (event, savedAccount) => {
+  if (!savedAccount || !savedAccount.refreshToken) {
+    return { success: false, message: 'No refresh token stored.' };
+  }
+
+  try {
+    console.log(`[Auth] Silently renewing Minecraft access token for ${savedAccount.name}...`);
+    sendConsoleLog('info', `[Auth] Renewing active Minecraft session for ${savedAccount.name}...`);
+
+    const xboxManager = await authManager.refresh(savedAccount.refreshToken);
+    const token = await xboxManager.getMinecraft();
+
+    const updatedAccount = {
+      name: token.profile.name,
+      uuid: token.profile.id,
+      mclcAuth: token.mclc(),
+      refreshToken: xboxManager.msToken?.refresh_token || savedAccount.refreshToken
+    };
+
+    return { success: true, account: updatedAccount };
+  } catch (err) {
+    console.error('[Auth Refresh Error]:', err.message);
+    sendConsoleLog('error', `[Auth Refresh Error] ${err.message}`);
+    return { success: false, message: err.message };
   }
 });
 
@@ -685,7 +712,6 @@ ipcMain.on('launch-game', async (event, config) => {
   createTuxConsoleWindow();
   sendConsoleLog('info', `[TuxLauncher] Validating instance files and initializing launch routine for Minecraft ${selectedVersion}...`);
 
-  // BUG 4 FIX: Execute file integrity scanner before initiating launch
   sanitizeAndValidateInstanceFiles(path.join(gameDir, 'assets'));
   sanitizeAndValidateInstanceFiles(path.join(gameDir, 'versions'));
   sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'libraries'));
