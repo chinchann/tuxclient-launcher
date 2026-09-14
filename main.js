@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 const path = require('path');
@@ -6,6 +6,7 @@ const fs = require('fs');
 const axios = require('axios');
 const WebSocket = require('ws');
 const RPC = require('discord-rpc');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { Client } = require('minecraft-launcher-core');
 const { Auth } = require('msmc');
@@ -13,7 +14,7 @@ const { Auth } = require('msmc');
 // Bypass self-signed certificate rejections on restricted networks
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-let mainWindow;
+let mainWindow = null;
 let logConsoleWindow = null;
 const launcher = new Client();
 const authManager = new Auth("select_account");
@@ -45,7 +46,7 @@ function setLauncherActivity(details, state) {
       largeImageKey: 'logo',
       largeImageText: 'TuxClient Launcher',
       instance: false,
-    }, process.pid); // Binding process.pid prevents Discord from auto-idling
+    }, process.pid);
   } catch (err) {
     console.error('[Discord RPC Activity Error]:', err.message);
   }
@@ -57,7 +58,7 @@ let currentActiveUsername = null;
 // --- LOGGING & AUTO-UPDATER CONFIGURATION ---
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
-autoUpdater.autoDownload = false; // Do not download silently so we can prompt the user via renderer modal
+autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
 // --- RENDER BACKEND WEBSOCKET URL ---
@@ -217,7 +218,6 @@ function sendConsoleLog(type, message) {
 
 /**
  * Validates file integrity across libraries, assets, and versions.
- * Checks for 0-byte files, invalid/empty JSON, and corrupt JARs (ZIP header check).
  */
 function sanitizeAndValidateInstanceFiles(dirPath) {
   if (!fs.existsSync(dirPath)) return;
@@ -232,41 +232,33 @@ function sanitizeAndValidateInstanceFiles(dirPath) {
       try {
         const stats = fs.statSync(fullPath);
 
-        // 1. Check for 0-byte empty files
         if (stats.size === 0) {
-          console.warn(`[TuxFix] Deleting 0-byte corrupted file: ${fullPath}`);
           fs.unlinkSync(fullPath);
           continue;
         }
 
-        // 2. Validate JSON file structural integrity
         if (entry.name.endsWith('.json')) {
           try {
             const content = fs.readFileSync(fullPath, 'utf8');
             JSON.parse(content);
           } catch (jsonErr) {
-            console.warn(`[TuxFix] Deleting malformed JSON file: ${fullPath}`);
             fs.unlinkSync(fullPath);
             continue;
           }
         }
 
-        // 3. Validate JAR archive integrity (Check for 'PK' ZIP signature bytes)
         if (entry.name.endsWith('.jar')) {
           const buffer = Buffer.alloc(4);
           const fd = fs.openSync(fullPath, 'r');
           fs.readSync(fd, buffer, 0, 4, 0);
           fs.closeSync(fd);
 
-          // ZIP header signature: 0x50 0x4B 0x03 0x04 ("PK\x03\x04")
           if (buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
-            console.warn(`[TuxFix] Deleting corrupted JAR archive (bad header): ${fullPath}`);
             fs.unlinkSync(fullPath);
             continue;
           }
         }
       } catch (err) {
-        console.error(`[TuxFix] Error inspecting ${fullPath}, removing:`, err);
         try { fs.unlinkSync(fullPath); } catch (e) {}
       }
     }
@@ -330,50 +322,7 @@ async function ensurePortableJava(event, requiredMajorVersion = 21) {
   return javaPath;
 }
 
-// --- GAME DIRECTORY & BUNDLED MOD INJECTION HELPER ---
-function ensureBundledMods(modsDir, mcVersion) {
-  const sourceBundledDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets', 'client-mods')
-    : path.join(__dirname, 'assets', 'client-mods');
-
-  if (fs.existsSync(sourceBundledDir)) {
-    const bundledFiles = fs.readdirSync(sourceBundledDir);
-    bundledFiles.forEach(file => {
-      if (file.endsWith('.jar')) {
-        const sourcePath = path.join(sourceBundledDir, file);
-        const destPath = path.join(modsDir, file);
-        const disabledPath = path.join(modsDir, file + '.disabled');
-
-        const alreadyExists = fs.existsSync(destPath) || fs.existsSync(disabledPath);
-
-        if (file.toLowerCase().includes('tuxclient')) {
-          if (mcVersion === '1.21.1') {
-            if (!alreadyExists) {
-              try {
-                fs.copyFileSync(sourcePath, destPath);
-                console.log(`[TuxLauncher] Injected ${file} into 1.21.1 mods folder.`);
-              } catch (err) {
-                console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
-              }
-            }
-          } else {
-            if (fs.existsSync(destPath)) try { fs.unlinkSync(destPath); } catch {}
-            if (fs.existsSync(disabledPath)) try { fs.unlinkSync(disabledPath); } catch {}
-          }
-        } else {
-          if (!alreadyExists) {
-            try {
-              fs.copyFileSync(sourcePath, destPath);
-            } catch (err) {
-              console.error(`[TuxLauncher Error] Failed to inject ${file}:`, err);
-            }
-          }
-        }
-      }
-    });
-  }
-}
-
+// --- GAME DIRECTORY INSTANCE SETUP (ISOLATED TO .tuxclient) ---
 function getInstancePath(version = '1.21.1', loader = 'fabric') {
   const instanceDir = path.join(TUX_ROOT, 'instances', `${version}-${loader}`);
   const modsDir = path.join(instanceDir, 'mods');
@@ -383,8 +332,6 @@ function getInstancePath(version = '1.21.1', loader = 'fabric') {
   if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
   if (!fs.existsSync(resourcePacksDir)) fs.mkdirSync(resourcePacksDir, { recursive: true });
   if (!fs.existsSync(shaderPacksDir)) fs.mkdirSync(shaderPacksDir, { recursive: true });
-
-  ensureBundledMods(modsDir, version);
 
   return { instanceDir, modsDir, resourcePacksDir, shaderPacksDir };
 }
@@ -439,16 +386,12 @@ function createWindow() {
     if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
       e.preventDefault();
 
-      console.log(`[TuxLauncher] Transmitting explicit logout frame for user: ${currentActiveUsername}`);
-      
       try {
         globalChatSocket.send(JSON.stringify({
           type: 'logout',
           username: currentActiveUsername
         }));
-      } catch (err) {
-        console.error('[TuxLauncher Shutdown Error]:', err.message);
-      }
+      } catch (err) {}
 
       setTimeout(() => {
         try { globalChatSocket.close(); } catch {}
@@ -500,19 +443,24 @@ function connectGlobalChat(username) {
   if (pingInterval) clearInterval(pingInterval);
 
   const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(normalizedUsername)}`;
-  console.log(`[TuxLauncher WS] Connecting to Render backend at: ${connectionUrl}`);
-
   globalChatSocket = new WebSocket(connectionUrl);
 
   globalChatSocket.on('open', () => {
-    console.log(`[TuxLauncher WS] Connection OPENED successfully for user: ${username}`);
-
     const authPacket = {
       type: 'auth',
       username: username,
       uuid: normalizedUsername
     };
     globalChatSocket.send(JSON.stringify(authPacket));
+
+    const initialPresence = {
+      type: 'presence_update',
+      username: username,
+      status: 'online',
+      session: null
+    };
+    globalChatSocket.send(JSON.stringify(initialPresence));
+    globalChatSocket.send(JSON.stringify({ ...initialPresence, type: 'user_status_change' }));
 
     pingInterval = setInterval(() => {
       if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
@@ -529,18 +477,14 @@ function connectGlobalChat(username) {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('network-packet', packet);
       }
-    } catch (err) {
-      console.error('[GlobalChat Packet Error]:', err);
-    }
+    } catch (err) {}
   });
 
   globalChatSocket.on('close', () => {
     if (pingInterval) clearInterval(pingInterval);
   });
 
-  globalChatSocket.on('error', (err) => {
-    console.error('[GlobalChat Socket Error]:', err.message);
-  });
+  globalChatSocket.on('error', (err) => {});
 }
 
 ipcMain.handle('init-global-chat', (event, username) => {
@@ -619,6 +563,37 @@ ipcMain.handle('respond-friend-request', async (event, { targetUsername, action,
   }
 });
 
+ipcMain.handle('remove-friend', async (event, { targetUsername, currentUser }) => {
+  try {
+    if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
+      const packet = {
+        type: 'remove_friend',
+        target: targetUsername.toLowerCase().trim(),
+        from: currentUser
+      };
+      globalChatSocket.send(JSON.stringify(packet));
+      return { success: true };
+    }
+    return { success: false, message: 'Socket disconnected' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+// --- CLIPBOARD COPY ROUTINE ONLY (AUTO-JOIN REMOVED) ---
+ipcMain.handle('copy-server-ip', async (event, rawIp) => {
+  try {
+    if (!rawIp || typeof rawIp !== 'string') {
+      return { success: false, message: 'No server IP available.' };
+    }
+    const cleanIp = rawIp.trim();
+    clipboard.writeText(cleanIp);
+    return { success: true, ip: cleanIp };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
 // --- AUTHENTICATION & SILENT SESSION REFRESH ---
 ipcMain.on('microsoft-login', async () => {
   try {
@@ -648,9 +623,6 @@ ipcMain.handle('refresh-account-session', async (event, savedAccount) => {
   }
 
   try {
-    console.log(`[Auth] Silently renewing Minecraft access token for ${savedAccount.name}...`);
-    sendConsoleLog('info', `[Auth] Renewing active Minecraft session for ${savedAccount.name}...`);
-
     const xboxManager = await authManager.refresh(savedAccount.refreshToken);
     const token = await xboxManager.getMinecraft();
 
@@ -663,8 +635,6 @@ ipcMain.handle('refresh-account-session', async (event, savedAccount) => {
 
     return { success: true, account: updatedAccount };
   } catch (err) {
-    console.error('[Auth Refresh Error]:', err.message);
-    sendConsoleLog('error', `[Auth Refresh Error] ${err.message}`);
     return { success: false, message: err.message };
   }
 });
@@ -707,13 +677,12 @@ ipcMain.on('launch-game', async (event, config) => {
 
   const ramMax = config && config.ram ? `${config.ram}G` : "4000M";
   const { instanceDir } = getInstancePath(selectedVersion, selectedLoader);
-  const gameDir = path.join(app.getPath('appData'), '.minecraft');
 
   createTuxConsoleWindow();
-  sendConsoleLog('info', `[TuxLauncher] Validating instance files and initializing launch routine for Minecraft ${selectedVersion}...`);
+  sendConsoleLog('info', `[TuxLauncher] Validating isolated instance files for Minecraft ${selectedVersion}...`);
 
-  sanitizeAndValidateInstanceFiles(path.join(gameDir, 'assets'));
-  sanitizeAndValidateInstanceFiles(path.join(gameDir, 'versions'));
+  sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'assets'));
+  sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'versions'));
   sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'libraries'));
   sanitizeAndValidateInstanceFiles(path.join(instanceDir, 'mods'));
 
@@ -741,11 +710,12 @@ ipcMain.on('launch-game', async (event, config) => {
     if (authData && authData.mclcAuth) {
       authData = authData.mclcAuth;
     } else if (!authData) {
+      const fallbackName = (config && config.username) ? config.username : (currentActiveUsername || "Player");
       authData = {
         access_token: "offline_token",
         client_token: "offline_client",
-        uuid: "offline_uuid",
-        name: (config && config.username) ? config.username : "_Graptor_",
+        uuid: crypto.createHash('md5').update(fallbackName).digest('hex'),
+        name: fallbackName,
         user_properties: "{}"
       };
     }
@@ -769,13 +739,62 @@ ipcMain.on('launch-game', async (event, config) => {
 
     launcher.removeAllListeners();
 
+    let sessionStartTime = null;
+
     launcher.on('data', (e) => {
       const str = e ? e.toString().trim() : '';
       if (str) sendConsoleLog('mc', str);
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', 'Launching Minecraft...');
       
-      // Continuous heartbeat update to prevent Discord process timeout
       setLauncherActivity(`Playing Minecraft ${selectedVersion}`, `Loader: ${selectedLoader.toUpperCase()}`);
+
+      const connectMatch = str.match(/Connecting to\s+([^\s,]+)/i);
+      if (connectMatch && connectMatch[1]) {
+        const rawIp = connectMatch[1].replace(/,/g, '');
+
+        if (!sessionStartTime) sessionStartTime = Date.now();
+
+        if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
+          const presencePayload = {
+            type: 'presence_update',
+            username: currentActiveUsername,
+            status: 'playing',
+            session: {
+              serverIp: rawIp,
+              gameVersion: selectedVersion,
+              modLoader: selectedLoader,
+              startTime: sessionStartTime
+            }
+          };
+
+          globalChatSocket.send(JSON.stringify(presencePayload));
+          globalChatSocket.send(JSON.stringify({
+            ...presencePayload,
+            type: 'user_status_change'
+          }));
+        }
+      }
+
+      if (str.includes('Starting integrated minecraft server') || str.includes('Loaded 0 recipes') || str.includes('Saving chunks for level')) {
+        if (!sessionStartTime) sessionStartTime = Date.now();
+
+        if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
+          const singleplayerPayload = {
+            type: 'presence_update',
+            username: currentActiveUsername,
+            status: 'playing',
+            session: {
+              serverIp: 'LAN / Singleplayer',
+              gameVersion: selectedVersion,
+              modLoader: selectedLoader,
+              startTime: sessionStartTime
+            }
+          };
+
+          globalChatSocket.send(JSON.stringify(singleplayerPayload));
+          globalChatSocket.send(JSON.stringify({ ...singleplayerPayload, type: 'user_status_change' }));
+        }
+      }
     });
 
     launcher.on('debug', (e) => {
@@ -791,7 +810,7 @@ ipcMain.on('launch-game', async (event, config) => {
     let lastProgressType = '';
 
     launcher.on('progress', (e) => {
-      const percentage = Math.round((e.current / e.total) * 100) || 0;
+      const percentage = Math.round((e.current / e.total) * 100);
       const currentType = e.type || "Downloading files...";
 
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -809,6 +828,20 @@ ipcMain.on('launch-game', async (event, config) => {
       sendConsoleLog('info', `[TuxLauncher] Process exited with code ${code}`);
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', code === 0 ? 'Ready' : `Crashed (Exit code: ${code})`);
       setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
+
+      sessionStartTime = null;
+
+      if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
+        const resetPayload = {
+          type: 'presence_update',
+          username: currentActiveUsername,
+          status: 'online',
+          session: null
+        };
+
+        globalChatSocket.send(JSON.stringify(resetPayload));
+        globalChatSocket.send(JSON.stringify({ ...resetPayload, type: 'user_status_change' }));
+      }
     });
 
     await launcher.launch(opts);
@@ -830,7 +863,7 @@ ipcMain.handle('get-installed-mods', async (event, { version = '1.21.1', loader 
       fileName: f, 
       name: f.replace('.disabled', '').replace('.jar', ''), 
       enabled: !f.endsWith('.disabled'),
-      isBundled: f.toLowerCase().includes('tuxclient')
+      isBundled: false
     }));
 });
 
@@ -929,10 +962,11 @@ ipcMain.handle('download-content-version-id', async (event, { projectId, version
   const paths = getInstancePath(version, loader);
   const targetDir = paths.modsDir;
 
-  const vRes = await axios.get(`https://api.modrinth.com/v2/version/${versionId}`, { headers: { 'User-Agent': 'TuxClient/1.0.0' } });
-  if (!vRes.data) throw new Error('Selected version build not found.');
+  const modrinthRes = await axios.get(`https://api.modrinth.com/v2/version/${versionId}`, { headers: { 'User-Agent': 'TuxClient/1.0.0' } });
+  const idRes = modrinthRes.data;
+  if (!idRes) throw new Error('Selected version build not found.');
 
-  const fileInfo = vRes.data.files.find(f => f.primary) || vRes.data.files[0];
+  const fileInfo = idRes.files.find(f => f.primary) || idRes.files[0];
   const filePath = path.join(targetDir, fileInfo.filename);
 
   const response = await axios({ url: fileInfo.url, method: 'GET', responseType: 'stream' });

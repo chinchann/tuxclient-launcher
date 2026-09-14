@@ -88,6 +88,7 @@ body {
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
 /* NAVIGATION SIDEBAR */
@@ -146,6 +147,148 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* ANCHORED CONTEXT MENU OVERLAY */
+#friend-context-menu {
+  position: fixed !important;
+  z-index: 10000 !important;
+  background: #14141F;
+  border: 1px solid #27273A;
+  border-radius: 8px;
+  width: 140px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  padding: 4px 0;
+  pointer-events: auto;
+}
+
+.ctx-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #9CA3AF;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ctx-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #F3F4F6;
+}
+
+.ctx-item.danger {
+  color: #EF4444;
+}
+
+.ctx-item.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #F87171;
+}
+
+/* COMPACT FRIEND CARD ITEM (FIXED RESPONSIVE & AVATAR WRAPPING) */
+.friend-card-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  cursor: context-menu;
+  transition: background 0.15s ease;
+}
+
+.friend-card-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.friend-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  margin-right: 12px;
+}
+
+.friend-avatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background-color: var(--bg-tertiary);
+}
+
+.friend-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.friend-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.friend-name {
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.friend-status-text {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.friend-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chat-btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* PRESENCE BADGES & TEXT */
+.status-online {
+  color: #4ADE80 !important;
+}
+
+.status-playing, .status-hosting {
+  color: #A855F7 !important;
+  font-weight: 600;
+}
+
+.status-offline {
+  color: #64748B !important;
 }
 
 /* CHAT PANEL DRAWER */
@@ -230,7 +373,7 @@ body {
   font-size: 12px;
 }
 
-/* PROFESSIONAL MINIMALIST PLAY TAB STYLING */
+/* HERO BANNER & PLAY TAB */
 .hero-banner {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(22, 22, 30, 0.6) 100%);
   border: 1px solid rgba(168, 85, 247, 0.2);
@@ -277,7 +420,6 @@ body {
   gap: 20px;
 }
 
-/* Balanced Grid: Version gets 1.5fr, Mod Loader gets 1fr so dropdowns look neat */
 .launch-options-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -383,7 +525,6 @@ body {
 .mods-section { margin-top: 20px; }
 .mods-section h3 { font-size: 16px; margin-bottom: 10px; color: var(--text-primary); }
 
-/* FIXED MOD GRID & CARD BOUNDING */
 .mod-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -448,7 +589,6 @@ body {
   margin: 2px 0 0 0;
 }
 
-/* MOD ACTION BUTTONS & TOGGLES */
 .mod-actions {
   display: flex;
   align-items: center;
@@ -491,7 +631,7 @@ body {
   background: rgba(239, 68, 68, 0.2);
 }
 
-/* FOOTER & ACCURATE PROGRESS BAR STYLING */
+/* FOOTER & PROGRESS BAR */
 .status-bar {
   height: 42px;
   background-color: var(--bg-secondary);
@@ -742,7 +882,6 @@ input:checked + .slider:before { transform: translateX(16px); }
   color: var(--text-muted);
 }
 
-/* RAM SLIDER & BADGE */
 .ram-control {
   display: flex;
   align-items: center;
@@ -807,7 +946,6 @@ input:checked + .slider:before { transform: translateX(16px); }
   100% { background-position: -200% 0; }
 }
 
-/* Spinner Animation */
 .spinner {
   width: 16px;
   height: 16px;

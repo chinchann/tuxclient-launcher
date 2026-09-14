@@ -9,8 +9,21 @@
     .status-online {
       color: #4ADE80 !important;
     }
+    .status-playing, .status-hosting {
+      color: #A855F7 !important;
+      font-weight: 600;
+    }
     .status-offline {
       color: #64748B !important;
+    }
+    .session-timer {
+      background: transparent !important;
+      border: 1px solid #A855F7 !important;
+      color: #A855F7 !important;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
     }
     .chat-date-divider {
       text-align: center;
@@ -72,7 +85,7 @@
             <h3>Active Account</h3>
             <div id="active-account-display" class="setting-row">
               <div class="profile-info" style="display: flex; align-items: center; gap: 12px; min-width: 0;">
-                <img id="active-profile-avatar" src="https://mc-heads.net/avatar/MSTEVE/32" width="32" height="32" alt="Avatar" style="border-radius: 4px; flex-shrink: 0;">
+                <img id="active-profile-avatar" src="https://crafthead.net/avatar/steve/32" width="32" height="32" alt="Avatar" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
                 <div class="setting-info" style="min-width: 0;">
                   <label id="active-profile-name">Not Signed In</label>
                   <span class="subtext" id="active-profile-uuid">No active session</span>
@@ -98,7 +111,7 @@
       <div id="friends-view" class="tab-view hidden">
         <div class="view-header">
           <h2>Social & Friends</h2>
-          <p>Connect with friends, accept incoming requests, launch direct chats, and make voice calls.</p>
+          <p>Connect with friends, accept incoming requests, and monitor multiplayer world statuses.</p>
         </div>
 
         <div class="settings-container">
@@ -379,19 +392,6 @@
     </div>
   </div>
 
-  <div id="call-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
-    <img id="call-user-avatar" src="https://mc-heads.net/avatar/MSTEVE/64" width="64" height="64" style="border-radius: 8px; margin-bottom: 12px; border: 2px solid #a855f7;">
-    <h2 id="call-user-name" style="margin: 0; color: #fff; font-size: 20px;">Caller Name</h2>
-    <p id="call-status-text" style="color: #9CA3AF; margin: 8px 0 24px 0; font-size: 14px;">Incoming Voice Call...</p>
-    
-    <div style="display: flex; gap: 16px;">
-      <button id="accept-call-btn" class="download-btn" style="background: #a855f7; color: white; padding: 10px 24px; font-weight: bold; display: inline-flex; align-items: center; gap: 8px;">
-        <img src="assets/calling.png" width="16" height="16" alt="Call"> Accept
-      </button>
-      <button id="reject-call-btn" class="secondary-btn close-btn-style" style="background: #EF4444; color: white; padding: 10px 24px; font-weight: bold;">🚫 Decline</button>
-    </div>
-  </div>
-
   <div id="update-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
     <div style="background: #14141F; border: 1px solid #1E1E2A; border-radius: 12px; padding: 28px; width: 420px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="background: rgba(168, 85, 247, 0.1); color: #a855f7; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px;">SYSTEM UPDATE</div>
@@ -412,7 +412,6 @@
     </div>
   </div>
 
-  <!-- SESSION EXPIRED RE-LOGIN MODAL -->
   <div id="session-expired-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
     <div style="background: #14141F; border: 1px solid #1E1E2A; border-radius: 12px; padding: 28px; width: 380px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="background: rgba(239, 68, 68, 0.1); color: #EF4444; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px;">SESSION EXPIRED</div>
@@ -425,7 +424,11 @@
     </div>
   </div>
 
-  <audio id="remote-audio" autoplay></audio>
+  <div id="friend-context-menu" class="hidden">
+    <button id="ctx-unfriend-btn" class="ctx-item danger">Unfriend</button>
+    <button id="ctx-mute-btn" class="ctx-item">Mute</button>
+  </div>
+
   <audio id="notification-sound" src="https://upload.wikimedia.org/wikipedia/commons/8/84/Notification_sound.mp3" preload="auto"></audio>
 
   <footer class="status-bar">
@@ -451,7 +454,6 @@
   <script>
   const { ipcRenderer } = require('electron');
 
-  // --- NATIVE DESKTOP NOTIFICATION HELPER ---
   function showDesktopNotification(title, body, iconUrl) {
     const sound = document.getElementById('notification-sound');
     if (sound) {
@@ -476,12 +478,10 @@
     }
   }
 
-  // --- 1. ESSENTIAL WINDOW CONTROLS ---
   document.getElementById('win-min')?.addEventListener('click', () => ipcRenderer.send('window-minimize'));
   document.getElementById('win-max')?.addEventListener('click', () => ipcRenderer.send('window-maximize'));
   document.getElementById('win-close')?.addEventListener('click', () => ipcRenderer.send('window-close'));
 
-  // --- 2. TAB NAVIGATION CONTROLS ---
   const tabs = [
     { btn: document.getElementById('tab-play-btn'), view: document.getElementById('play-view') },
     { btn: document.getElementById('tab-profiles-btn'), view: document.getElementById('view-profiles') },
@@ -526,7 +526,6 @@
     });
   });
 
-  // Auto-refresh active tab on version or loader change
   const refreshActiveTabContent = () => {
     const activeTabBtn = document.querySelector('.nav-btn.active');
     if (!activeTabBtn) return;
@@ -546,7 +545,6 @@
   document.getElementById('version-select')?.addEventListener('change', refreshActiveTabContent);
   document.getElementById('loader-select')?.addEventListener('change', refreshActiveTabContent);
 
-  // --- TIME AND DATE FORMATTING HELPERS ---
   function formatTime(timestamp) {
     const date = new Date(timestamp || Date.now());
     let hours = date.getHours();
@@ -588,7 +586,113 @@
     return `Offline (just now)`;
   }
 
-  // --- CHAT PERSISTENCE MEMORY & APPEND HELPER ---
+  function formatSessionDuration(startTimeMs) {
+    if (!startTimeMs) return "0:00";
+    const diffMs = Math.max(0, Date.now() - Number(startTimeMs));
+    const totalSeconds = Math.floor(diffMs / 1000);
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const paddedSeconds = String(seconds).padStart(2, '0');
+
+    if (hours > 0) {
+      const paddedMinutes = String(minutes).padStart(2, '0');
+      return `${hours}:${paddedMinutes}:${paddedSeconds}`;
+    }
+    return `${minutes}:${paddedSeconds}`;
+  }
+
+  const activeFriendTimers = {};
+  let currentFriendsList = new Set();
+  let mutedFriends = new Set();
+  let activeContextTarget = null;
+
+  const contextMenu = document.getElementById('friend-context-menu');
+  const muteBtn = document.getElementById('ctx-mute-btn');
+  const unfriendBtn = document.getElementById('ctx-unfriend-btn');
+
+  window.addEventListener('mousedown', (e) => {
+    if (contextMenu && !contextMenu.contains(e.target)) {
+      hideContextMenu();
+    }
+  });
+
+  function hideContextMenu() {
+    if (contextMenu) contextMenu.classList.add('hidden');
+    activeContextTarget = null;
+  }
+
+  function showContextMenu(e, targetElement, username, isMuted) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    activeContextTarget = username;
+    if (muteBtn) {
+      muteBtn.innerText = isMuted ? 'Unmute' : 'Mute';
+    }
+
+    contextMenu.classList.remove('hidden');
+
+    const rect = targetElement.getBoundingClientRect();
+    contextMenu.style.left = `${rect.left + 12}px`;
+    contextMenu.style.top = `${rect.bottom - 6}px`;
+  }
+
+  muteBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!activeContextTarget) return;
+
+    const targetKey = activeContextTarget.toLowerCase().trim();
+    if (mutedFriends.has(targetKey)) {
+      mutedFriends.delete(targetKey);
+    } else {
+      mutedFriends.add(targetKey);
+    }
+
+    hideContextMenu();
+  });
+
+  unfriendBtn?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!activeContextTarget) return;
+
+    const friendName = activeContextTarget;
+    hideContextMenu();
+
+    if (confirm(`Are you sure you want to remove ${friendName} from your friends?`)) {
+      const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
+      const res = await ipcRenderer.invoke('remove-friend', {
+        targetUsername: friendName,
+        currentUser: currentUser
+      });
+
+      if (res.success) {
+        removeFriendFromListUI(friendName);
+      } else {
+        alert(`Failed to unfriend ${friendName}.`);
+      }
+    }
+  });
+
+  function removeFriendFromListUI(friendUsername) {
+    if (!friendUsername) return;
+    const friendKey = friendUsername.toLowerCase().trim();
+    
+    document.getElementById(`friend-card-${friendKey}`)?.remove();
+    currentFriendsList.delete(friendKey);
+
+    if (activeFriendTimers[friendUsername]) {
+      clearInterval(activeFriendTimers[friendUsername]);
+      delete activeFriendTimers[friendUsername];
+    }
+
+    const friendsContainer = document.getElementById('friends-list-container');
+    if (friendsContainer && friendsContainer.children.length === 0) {
+      friendsContainer.innerHTML = '<p class="subtext">Sign in to see your friends.</p>';
+    }
+  }
+
   let activeChatHistory = { GLOBAL: [] };
 
   function appendChatMessage(containerId, sender, text, timestamp) {
@@ -618,7 +722,6 @@
     container.scrollTop = container.scrollHeight;
   }
 
-  // --- CHAT & SOCIAL NETWORK CONTROLS ---
   const chatPanel = document.getElementById('chat-panel');
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
   const closeChatBtn = document.getElementById('close-chat-btn');
@@ -678,217 +781,110 @@
     }
   }
 
-  // RENDER FRIEND CARD IN MY FRIENDS LIST
   function renderFriendInList(friendData) {
     const friendsContainer = document.getElementById('friends-list-container');
     if (!friendsContainer || (!activeAccount && !currentUsername)) return;
+
+    const friendUsername = typeof friendData === 'string' ? friendData : (friendData.username || friendData.name);
+    if (!friendUsername) return;
+
+    const myUsername = currentUsername || (activeAccount ? activeAccount.name : '');
+
+    if (myUsername && friendUsername.toLowerCase().trim() === myUsername.toLowerCase().trim()) {
+      return;
+    }
 
     if (friendsContainer.querySelector('.subtext')) {
       friendsContainer.innerHTML = '';
     }
 
-    const friendUsername = typeof friendData === 'string' ? friendData : friendData.username;
-    const status = typeof friendData === 'string' ? 'online' : (friendData.status || 'offline');
-    const isOnline = status === 'online';
-    const offlineText = isOnline ? 'Online' : formatOfflineDuration(friendData.lastSeen);
+    const friendKey = friendUsername.toLowerCase().trim();
+    currentFriendsList.add(friendKey);
 
-    let friendCard = document.getElementById(`friend-card-${friendUsername.toLowerCase()}`);
-    
+    let rawStatus = typeof friendData === 'string' ? 'online' : (friendData.status || (friendData.isOnline ? 'online' : 'offline'));
+    const session = typeof friendData === 'object' ? friendData.session : null;
+    const isHosting = session && session.serverIp;
+    const startTime = session?.startTime || null;
+
+    let isOnline = rawStatus === 'online' || rawStatus === 'hosting' || rawStatus === 'playing';
+    let statusClass = isOnline ? 'status-online' : 'status-offline';
+    let statusTextLabel = isOnline ? 'Online' : formatOfflineDuration(friendData.lastSeen);
+
+    if (isHosting || rawStatus === 'playing') {
+      statusClass = 'status-playing';
+      
+      const hostLabel = (session && session.serverIp)
+        ? (session.serverIp.startsWith('LAN') ? 'Playing Singleplayer / LAN' : `Playing on ${session.serverIp}`)
+        : 'Playing Minecraft';
+
+      const versionStr = session?.gameVersion ? `MC ${session.gameVersion}` : '';
+      const loaderStr = session?.modLoader ? `(${session.modLoader.charAt(0).toUpperCase() + session.modLoader.slice(1)})` : '';
+      const detailsStr = [versionStr, loaderStr].filter(Boolean).join(' ');
+
+      statusTextLabel = detailsStr ? `${hostLabel} · ${detailsStr}` : hostLabel;
+    }
+
+    const avatarUrl = `https://crafthead.net/avatar/${encodeURIComponent(friendUsername)}/36`;
+    let friendCard = document.getElementById(`friend-card-${friendKey}`);
+
     if (friendCard) {
       const statusText = friendCard.querySelector('.friend-status-text');
-      const callBtn = friendCard.querySelector('.call-btn-action');
+      const timerEl = friendCard.querySelector('.session-timer');
+
       if (statusText) {
-        statusText.innerText = offlineText;
-        statusText.className = `subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}`;
+        statusText.innerText = statusTextLabel;
+        statusText.className = `friend-status-text ${statusClass}`;
       }
-      if (callBtn) {
-        callBtn.disabled = !isOnline;
-        callBtn.style.opacity = isOnline ? '1' : '0.4';
-        callBtn.style.cursor = isOnline ? 'pointer' : 'not-allowed';
+
+      if (timerEl && startTime) {
+        timerEl.innerText = formatSessionDuration(startTime);
+        timerEl.classList.remove('hidden');
+      } else if (timerEl) {
+        timerEl.classList.add('hidden');
       }
-      return;
-    }
-
-    friendCard = document.createElement('div');
-    friendCard.id = `friend-card-${friendUsername.toLowerCase()}`;
-    friendCard.className = 'setting-row';
-    friendCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
-    friendCard.innerHTML = `
-      <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-        <img src="https://mc-heads.net/avatar/${friendUsername}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
-        <div class="setting-info" style="min-width: 0;">
-          <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${friendUsername}</strong></label>
-          <span class="subtext friend-status-text ${isOnline ? 'status-online' : 'status-offline'}">${offlineText}</span>
-        </div>
-      </div>
-      <div style="flex-shrink: 0; display: flex; gap: 6px;">
-        <button class="secondary-btn call-btn-action" style="background: #a855f7; color: white; display: inline-flex; align-items: center; gap: 6px; ${!isOnline ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${!isOnline ? 'disabled' : ''} onclick="startVoiceCall('${friendUsername}')">
-          <img src="assets/calling.png" width="14" height="14" alt="Call"> Call
-        </button>
-        <button class="secondary-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
-      </div>
-    `;
-    friendsContainer.appendChild(friendCard);
-  }
-
-  // --- WEBRTC VOICE CALL ENGINE (FIXED SIGNALING) ---
-  let peerConnection = null;
-  let localStream = null;
-  let currentCallTarget = null;
-  let incomingOffer = null;
-
-  const rtcConfig = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  };
-
-  window.startVoiceCall = async (targetUsername) => {
-    currentCallTarget = targetUsername;
-    showCallModal(targetUsername, "Calling...", true);
-
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    } catch (err) {
-      alert("Microphone access denied or not found.");
-      endCall(false);
-      return;
-    }
-
-    peerConnection = new RTCPeerConnection(rtcConfig);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-    peerConnection.ontrack = (event) => {
-      document.getElementById('remote-audio').srcObject = event.streams[0];
-    };
-
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate && currentCallTarget) {
-        ipcRenderer.invoke('send-socket-packet', {
-          type: 'ice_candidate',
-          from: currentUsername || (activeAccount ? activeAccount.name : ''),
-          target: currentCallTarget,
-          candidate: event.candidate
-        });
-      }
-    };
-
-    try {
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-
-      ipcRenderer.invoke('send-socket-packet', {
-        type: 'start_call',
-        from: currentUsername || (activeAccount ? activeAccount.name : ''),
-        target: targetUsername,
-        sdp: offer
-      });
-    } catch (err) {
-      console.error("[Call Error] Failed to create offer:", err);
-      endCall(false);
-    }
-  };
-
-  document.getElementById('accept-call-btn')?.addEventListener('click', async () => {
-    if (!incomingOffer) return;
-
-    currentCallTarget = incomingOffer.from;
-    document.getElementById('call-status-text').innerText = "Connected";
-    document.getElementById('accept-call-btn').style.display = 'none';
-
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    } catch (err) {
-      alert("Microphone required to join the call.");
-      endCall(true);
-      return;
-    }
-
-    peerConnection = new RTCPeerConnection(rtcConfig);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-    peerConnection.ontrack = (event) => {
-      document.getElementById('remote-audio').srcObject = event.streams[0];
-    };
-
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate && currentCallTarget) {
-        ipcRenderer.invoke('send-socket-packet', {
-          type: 'ice_candidate',
-          from: currentUsername || (activeAccount ? activeAccount.name : ''),
-          target: currentCallTarget,
-          candidate: event.candidate
-        });
-      }
-    };
-
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingOffer.sdp));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-
-    ipcRenderer.invoke('send-socket-packet', {
-      type: 'call_answer',
-      from: currentUsername || (activeAccount ? activeAccount.name : ''),
-      target: currentCallTarget,
-      sdp: answer
-    });
-  });
-
-  document.getElementById('reject-call-btn')?.addEventListener('click', () => {
-    endCall(true);
-  });
-
-  function endCall(sendRejectSignal = false) {
-    if (sendRejectSignal && currentCallTarget) {
-      ipcRenderer.invoke('send-socket-packet', {
-        type: 'reject_call',
-        from: currentUsername || (activeAccount ? activeAccount.name : ''),
-        target: currentCallTarget
-      });
-    }
-
-    if (peerConnection) {
-      peerConnection.close();
-      peerConnection = null;
-    }
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-      localStream = null;
-    }
-    incomingOffer = null;
-    currentCallTarget = null;
-    hideCallModal();
-  }
-
-  function showCallModal(username, status, isCaller = false) {
-    const modal = document.getElementById('call-modal');
-    document.getElementById('call-user-avatar').src = `https://mc-heads.net/avatar/${username}/64`;
-    document.getElementById('call-user-name').innerText = username;
-    document.getElementById('call-status-text').innerText = status;
-
-    const acceptBtn = document.getElementById('accept-call-btn');
-    const rejectBtn = document.getElementById('reject-call-btn');
-
-    if (isCaller) {
-      if (acceptBtn) acceptBtn.style.display = 'none';
-      if (rejectBtn) rejectBtn.innerText = '🛑 Hang Up';
     } else {
-      if (acceptBtn) {
-        acceptBtn.style.display = 'inline-flex';
-        acceptBtn.innerHTML = `<img src="assets/calling.png" width="16" height="16" alt="Call"> Accept`;
-      }
-      if (rejectBtn) rejectBtn.innerText = '🚫 Decline';
+      friendCard = document.createElement('div');
+      friendCard.id = `friend-card-${friendKey}`;
+      friendCard.className = 'friend-card-item';
+
+      friendCard.addEventListener('contextmenu', (e) => {
+        showContextMenu(e, friendCard, friendUsername, mutedFriends.has(friendKey));
+      });
+
+      friendCard.innerHTML = `
+        <div class="friend-card-left">
+          <img src="${avatarUrl}" class="friend-avatar" alt="${friendUsername}" onerror="this.src='https://crafatar.com/avatars/steve?size=36&default=MSTEVE'">
+          <div class="friend-details">
+            <div class="friend-name-row">
+              <strong class="friend-name">${friendUsername}</strong>
+              <span class="session-timer badge ${startTime ? '' : 'hidden'}">
+                ${formatSessionDuration(startTime)}
+              </span>
+            </div>
+            <span class="friend-status-text ${statusClass}">${statusTextLabel}</span>
+          </div>
+        </div>
+        <div class="friend-card-right">
+          <button class="secondary-btn chat-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
+        </div>
+      `;
+
+      friendsContainer.appendChild(friendCard);
     }
 
-    modal.classList.remove('hidden');
+    if (startTime) {
+      if (activeFriendTimers[friendUsername]) clearInterval(activeFriendTimers[friendUsername]);
+      activeFriendTimers[friendUsername] = setInterval(() => {
+        const timerEl = document.querySelector(`#friend-card-${friendKey} .session-timer`);
+        if (timerEl) {
+          timerEl.innerText = formatSessionDuration(startTime);
+        } else {
+          clearInterval(activeFriendTimers[friendUsername]);
+        }
+      }, 1000);
+    }
   }
 
-  function hideCallModal() {
-    const modal = document.getElementById('call-modal');
-    const acceptBtn = document.getElementById('accept-call-btn');
-    if (acceptBtn) acceptBtn.style.display = 'inline-flex';
-    modal.classList.add('hidden');
-  }
-
-  // --- TUXCLIENT THEMED AUTO-UPDATER LISTENERS ---
   ipcRenderer.on('update-available-prompt', (event, version) => {
     const modal = document.getElementById('update-modal');
     const msg = document.getElementById('update-message');
@@ -934,11 +930,8 @@
     modal.classList.remove('hidden');
   });
 
-  // --- NETWORK PACKET LISTENER ---
   ipcRenderer.on('network-packet', async (event, packet) => {
-    console.log('[UI] Incoming Network Packet:', packet);
-
-    const myUsername = (currentUsername || (activeAccount ? activeAccount.name : '')).toLowerCase().trim();
+    console.log(`[UI SOCKET RECEIVED] Packet Type: "${packet ? packet.type : 'undefined'}"`, packet);
 
     if (packet.type === 'initial_data') {
       if (packet.friends && Array.isArray(packet.friends)) {
@@ -954,7 +947,7 @@
             reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
             reqCard.innerHTML = `
               <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                <img src="https://mc-heads.net/avatar/${requester}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+                <img src="https://crafthead.net/avatar/${encodeURIComponent(requester)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
                 <div class="setting-info" style="min-width: 0;">
                   <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${requester}</strong></label>
                   <span class="subtext">Wants to be your friend</span>
@@ -992,8 +985,27 @@
       }
     }
 
-    if (packet.type === 'user_status_change') {
-      renderFriendInList({ username: packet.username, status: packet.status, lastSeen: packet.lastSeen });
+    if (packet.type === 'user_status_change' || packet.type === 'presence_update') {
+      const myName = currentUsername || (activeAccount ? activeAccount.name : '');
+      const incomingUser = packet.username || packet.from;
+
+      console.log(`[UI Status Update] Evaluating status change for incoming user: "${incomingUser}" (Self: "${myName}")`);
+
+      if (incomingUser && (!myName || incomingUser.toLowerCase().trim() !== myName.toLowerCase().trim())) {
+        console.log(`[UI Status Update] Rendering updated friend card for: ${incomingUser}`, packet.session);
+        renderFriendInList({
+          username: incomingUser,
+          status: packet.status || 'playing',
+          lastSeen: packet.lastSeen,
+          session: packet.session
+        });
+      }
+    }
+
+    if (packet.type === 'friend_removed') {
+      const targetToRemove = packet.from || packet.username;
+      console.log(`[UI Socket Received] Unfriend event triggered by: ${targetToRemove}`);
+      removeFriendFromListUI(targetToRemove);
     }
 
     if (packet.type === 'friend_request') {
@@ -1006,7 +1018,7 @@
         reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
         reqCard.innerHTML = `
           <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-            <img src="https://mc-heads.net/avatar/${packet.from}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+            <img src="https://crafthead.net/avatar/${encodeURIComponent(packet.from)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
             <div class="setting-info" style="min-width: 0;">
               <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${packet.from}</strong></label>
               <span class="subtext">Wants to be your friend</span>
@@ -1034,7 +1046,7 @@
         showDesktopNotification(
           `Global Chat: ${packet.sender}`,
           packet.text,
-          `https://mc-heads.net/avatar/${packet.sender}/64`
+          `https://crafthead.net/avatar/${encodeURIComponent(packet.sender)}/64`
         );
       }
     }
@@ -1046,55 +1058,20 @@
       if (!activeChatHistory[friendKey]) activeChatHistory[friendKey] = [];
       activeChatHistory[friendKey].push({ sender: packet.from, text: packet.text, timestamp: ts });
 
-      if (!currentActivePrivateFriend || currentActivePrivateFriend.toLowerCase() !== packet.from.toLowerCase() || privateChatPanel.classList.contains('hidden')) {
-        showDesktopNotification(
-          `Message from ${packet.from}`,
-          packet.text,
-          `https://mc-heads.net/avatar/${packet.from}/64`
-        );
+      if (!mutedFriends.has(packet.from.toLowerCase().trim())) {
+        if (!currentActivePrivateFriend || currentActivePrivateFriend.toLowerCase().trim() !== packet.from.toLowerCase().trim() || privateChatPanel.classList.contains('hidden')) {
+          showDesktopNotification(
+            `Message from ${packet.from}`,
+            packet.text,
+            `https://crafthead.net/avatar/${encodeURIComponent(packet.from)}/64`
+          );
+        }
       }
 
-      if (currentActivePrivateFriend && currentActivePrivateFriend.toLowerCase() === packet.from.toLowerCase()) {
+      if (currentActivePrivateFriend && currentActivePrivateFriend.toLowerCase().trim() === packet.from.toLowerCase().trim()) {
         appendChatMessage('private-chat-messages-container', packet.from, packet.text, ts);
       } else {
         openDirectChat(packet.from);
-      }
-    }
-
-    if (packet.type === 'incoming_call' || packet.type === 'start_call') {
-      const targetName = (packet.target || packet.recipient || '').toLowerCase().trim();
-      if (targetName && myUsername && targetName !== myUsername) return;
-
-      currentCallTarget = packet.from;
-      incomingOffer = packet;
-      showCallModal(packet.from, "Incoming Voice Call...", false);
-      showDesktopNotification(
-        `Incoming Voice Call`,
-        `${packet.from} is calling you!`,
-        `https://mc-heads.net/avatar/${packet.from}/64`
-      );
-    }
-
-    if (packet.type === 'call_offer') {
-      incomingOffer = packet;
-    }
-
-    if (packet.type === 'call_answer') {
-      if (peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(packet.sdp));
-        document.getElementById('call-status-text').innerText = "Connected";
-      }
-    }
-
-    if (packet.type === 'ice_candidate') {
-      if (peerConnection && packet.candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(packet.candidate));
-      }
-    }
-
-    if (packet.type === 'reject_call' || packet.type === 'end_call') {
-      if (packet.from && currentCallTarget && packet.from.toLowerCase() === currentCallTarget.toLowerCase()) {
-        endCall(false);
       }
     }
   });
@@ -1111,6 +1088,16 @@
 
     if (!targetUsername) {
       alert('Please enter a username.');
+      return;
+    }
+
+    if (targetUsername.toLowerCase() === senderUsername.toLowerCase()) {
+      alert('You cannot add yourself as a friend.');
+      return;
+    }
+
+    if (currentFriendsList.has(targetUsername.toLowerCase())) {
+      alert(`You are already friends with ${targetUsername}.`);
       return;
     }
 
@@ -1195,7 +1182,6 @@
     input.value = '';
   };
 
-  // --- 3. VERSION FETCHING ---
   let allVersions = [];
 
   async function initializeVersions() {
@@ -1238,7 +1224,6 @@
   document.getElementById('show-snapshots')?.addEventListener('change', initializeVersions);
   document.getElementById('show-historical')?.addEventListener('change', initializeVersions);
 
-  // --- 4. AUTH & LAUNCH CONTROLS ---
   const loginBtn = document.getElementById('login-btn');
   const playBtn = document.getElementById('play-btn');
   const userCard = document.getElementById('user-card');
@@ -1267,13 +1252,13 @@
 
       if (activeName) activeName.textContent = activeAccount.name;
       if (activeUuid) activeUuid.textContent = `UUID: ${activeAccount.uuid.substring(0, 13)}...`;
-      if (activeAvatar) activeAvatar.src = `https://mc-heads.net/avatar/${activeAccount.uuid}/32`;
+      if (activeAvatar) activeAvatar.src = `https://crafthead.net/avatar/${activeAccount.uuid}/32`;
       if (signoutBtn) signoutBtn.classList.remove('hidden');
 
       if (userCard) {
         userCard.innerHTML = `
           <div class="profile-info" style="display: flex; align-items: center; gap: 8px;">
-            <img src="https://mc-heads.net/avatar/${activeAccount.name}/24" alt="Avatar" style="border-radius: 4px;">
+            <img src="https://crafthead.net/avatar/${encodeURIComponent(activeAccount.name)}/24" alt="Avatar" style="border-radius: 4px;" onerror="this.src='https://crafatar.com/avatars/steve?size=24&default=MSTEVE'">
             <span>User: <strong>${activeAccount.name}</strong></span>
           </div>
         `;
@@ -1287,7 +1272,7 @@
 
       if (activeName) activeName.textContent = "Not Signed In";
       if (activeUuid) activeUuid.textContent = "No active session";
-      if (activeAvatar) activeAvatar.src = "https://mc-heads.net/avatar/MSTEVE/32";
+      if (activeAvatar) activeAvatar.src = "https://crafthead.net/avatar/steve/32";
       if (signoutBtn) signoutBtn.classList.add('hidden');
 
       if (userCard) {
@@ -1301,14 +1286,14 @@
 
     if (accountsList) {
       if (savedAccounts.length === 0) {
-        accountsList.innerHTML = '<p class="subtext">No accounts saved yet. Click "+ Add Account" to sign in with Microsoft.</p>';
+        accountsList.innerHTML = '<p class="subtext">No accounts saved yet. Click "Add Account" to sign in with Microsoft.</p>';
       } else {
         accountsList.innerHTML = savedAccounts.map(acc => {
           const isActive = activeAccount && activeAccount.uuid === acc.uuid;
           return `
             <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; box-sizing: border-box; width: 100%;">
               <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                <img src="https://mc-heads.net/avatar/${acc.uuid}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;">
+                <img src="https://crafthead.net/avatar/${acc.uuid}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
                 <div class="setting-info" style="min-width: 0;">
                   <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${acc.name} ${isActive ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #a855f7;">ACTIVE</span>' : ''}</label>
                   <span class="subtext">${acc.uuid.substring(0, 18)}...</span>
@@ -1383,7 +1368,6 @@
     updateAccountUI();
   };
 
-  // --- AUTOMATIC SESSION RENEWAL & LAUNCH ---
   playBtn?.addEventListener('click', async () => {
     if (!activeAccount) return;
 
@@ -1391,7 +1375,6 @@
     playBtn.innerText = "AUTHENTICATING...";
     if (statusText) statusText.innerText = "Status: Validating session token...";
 
-    // 1. SILENT TOKEN REFRESH BEFORE GAME LAUNCH
     if (activeAccount.refreshToken) {
       const refreshResult = await ipcRenderer.invoke('refresh-account-session', activeAccount);
 
@@ -1418,7 +1401,6 @@
       }
     }
 
-    // 2. TRIGGER GAME LAUNCH
     const selectedVersion = document.getElementById('version-select').value;
     const selectedLoader = document.getElementById('loader-select').value;
     const ramAllocation = document.getElementById('ram-slider')?.value || 4;
@@ -1462,7 +1444,6 @@
     }
   });
 
-  // --- 5. 3D SKIN VIEWER & ANIMATION CONTROLS ---
   let skinViewer = null;
 
   function initSkinViewer() {
@@ -1649,15 +1630,12 @@
     }
   };
 
-  // --- 6. MOD MANAGEMENT & SEARCH ---
   async function loadInstalledMods() {
     const container = document.getElementById('installed-mods-list');
     if (!container) return;
 
     const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
-
-    container.innerHTML = '<p class="subtext">Loading installed mods...</p>';
 
     try {
       const mods = await ipcRenderer.invoke('get-installed-mods', { version, loader });
@@ -1667,21 +1645,32 @@
         return;
       }
 
-      container.innerHTML = mods.map(m => `
-        <div class="mod-card">
-          <div class="mod-info">
-            <strong title="${m.name}">${m.name}</strong>
-            ${m.isBundled ? '<span class="badge" style="font-size:9px; background:#a855f7; margin-top:2px;">CLIENT MOD</span>' : ''}
+      if (container.children.length !== mods.length || container.querySelector('.subtext')) {
+        container.innerHTML = mods.map(m => `
+          <div class="mod-card" data-filename="${m.fileName}">
+            <div class="mod-info">
+              <strong title="${m.name}">${m.name}</strong>
+            </div>
+            <div class="mod-actions">
+              <label class="switch" title="Enable / Disable Mod">
+                <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName}', this.checked)">
+                <span class="slider"></span>
+              </label>
+              <button class="delete-icon-btn" onclick="deleteMod('${m.fileName}')" title="Delete Mod">🗑️</button>
+            </div>
           </div>
-          <div class="mod-actions">
-            <label class="switch" title="Enable / Disable Mod">
-              <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName}', this.checked)">
-              <span class="slider"></span>
-            </label>
-            ${!m.isBundled ? `<button class="delete-icon-btn" onclick="deleteMod('${m.fileName}')" title="Delete Mod">🗑️</button>` : ''}
-          </div>
-        </div>
-      `).join('');
+        `).join('');
+      } else {
+        mods.forEach(m => {
+          const card = container.querySelector(`[data-filename="${CSS.escape(m.fileName)}"]`);
+          if (card) {
+            const checkbox = card.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked !== m.enabled) {
+              checkbox.checked = m.enabled;
+            }
+          }
+        });
+      }
     } catch {
       container.innerHTML = '<p class="subtext">Error loading mods folder.</p>';
     }
@@ -1691,17 +1680,8 @@
     const version = document.getElementById('version-select')?.value || '1.21.1';
     const loader = document.getElementById('loader-select')?.value || 'fabric';
 
-    const mainContent = document.querySelector('.main-content');
-    const container = document.getElementById('installed-mods-list');
-
-    const mainScrollTop = mainContent ? mainContent.scrollTop : 0;
-    const containerScrollTop = container ? container.scrollTop : 0;
-
     await ipcRenderer.invoke('toggle-mod', { version, loader, fileName, enable });
-    await loadInstalledMods();
-
-    if (mainContent) mainContent.scrollTop = mainScrollTop;
-    if (container) container.scrollTop = containerScrollTop;
+    loadInstalledMods();
   };
 
   window.deleteMod = async (fileName) => {
@@ -1781,7 +1761,6 @@
     }
   };
 
-  // --- 7. RESOURCE PACKS & SHADERS MANAGER ---
   async function loadInstalledPacks(typeFolder) {
     const container = document.getElementById(typeFolder === 'shaders' ? 'installed-shaders-list' : 'installed-packs-list');
     if (!container) return;
@@ -1902,7 +1881,6 @@
     }
   };
 
-  // --- 8. SETTINGS HANDLERS ---
   function initSettings() {
     const ramSlider = document.getElementById('ram-slider');
     const ramDisplay = document.getElementById('ram-display');
