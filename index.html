@@ -575,7 +575,7 @@
 
   function formatOfflineDuration(lastSeenMs) {
     if (!lastSeenMs) return 'Offline';
-    const diffMs = Date.now() - Number(lastSeenMs);
+    const diffMs = Math.max(0, Date.now() - Number(lastSeenMs));
     const mins = Math.floor(diffMs / (1000 * 60));
     const hrs = Math.floor(mins / 60);
     const days = Math.floor(hrs / 24);
@@ -604,6 +604,7 @@
   }
 
   const activeFriendTimers = {};
+  const activeOfflineTimers = {};
   let currentFriendsList = new Set();
   let mutedFriends = new Set();
   let activeContextTarget = null;
@@ -685,6 +686,10 @@
     if (activeFriendTimers[friendUsername]) {
       clearInterval(activeFriendTimers[friendUsername]);
       delete activeFriendTimers[friendUsername];
+    }
+    if (activeOfflineTimers[friendUsername]) {
+      clearInterval(activeOfflineTimers[friendUsername]);
+      delete activeOfflineTimers[friendUsername];
     }
 
     const friendsContainer = document.getElementById('friends-list-container');
@@ -805,10 +810,11 @@
     const session = typeof friendData === 'object' ? friendData.session : null;
     const isHosting = session && session.serverIp;
     const startTime = session?.startTime || null;
+    const lastSeen = typeof friendData === 'object' && friendData.lastSeen ? friendData.lastSeen : Date.now();
 
     let isOnline = rawStatus === 'online' || rawStatus === 'hosting' || rawStatus === 'playing';
     let statusClass = isOnline ? 'status-online' : 'status-offline';
-    let statusTextLabel = isOnline ? 'Online' : formatOfflineDuration(friendData.lastSeen);
+    let statusTextLabel = isOnline ? 'Online' : formatOfflineDuration(lastSeen);
 
     if (isHosting || rawStatus === 'playing') {
       statusClass = 'status-playing';
@@ -873,6 +879,10 @@
     }
 
     if (startTime) {
+      if (activeOfflineTimers[friendUsername]) {
+        clearInterval(activeOfflineTimers[friendUsername]);
+        delete activeOfflineTimers[friendUsername];
+      }
       if (activeFriendTimers[friendUsername]) clearInterval(activeFriendTimers[friendUsername]);
       activeFriendTimers[friendUsername] = setInterval(() => {
         const timerEl = document.querySelector(`#friend-card-${friendKey} .session-timer`);
@@ -882,6 +892,22 @@
           clearInterval(activeFriendTimers[friendUsername]);
         }
       }, 1000);
+    } else {
+      if (activeFriendTimers[friendUsername]) {
+        clearInterval(activeFriendTimers[friendUsername]);
+        delete activeFriendTimers[friendUsername];
+      }
+      if (!isOnline) {
+        if (activeOfflineTimers[friendUsername]) clearInterval(activeOfflineTimers[friendUsername]);
+        activeOfflineTimers[friendUsername] = setInterval(() => {
+          const statusTextEl = document.querySelector(`#friend-card-${friendKey} .friend-status-text`);
+          if (statusTextEl && statusTextEl.classList.contains('status-offline')) {
+            statusTextEl.innerText = formatOfflineDuration(lastSeen);
+          } else {
+            clearInterval(activeOfflineTimers[friendUsername]);
+          }
+        }, 30000);
+      }
     }
   }
 
@@ -1429,8 +1455,9 @@
 
   ipcRenderer.on('launch-progress', (event, data) => {
     if (progressContainer) progressContainer.classList.remove('hidden');
-    if (progressFill) progressFill.style.width = `${data.percent}%`;
-    if (progressPercentage) progressPercentage.innerText = `${data.percent}%`;
+    const safePercent = (data && typeof data.percent === 'number' && !isNaN(data.percent)) ? Math.max(0, Math.min(100, data.percent)) : 0;
+    if (progressFill) progressFill.style.width = `${safePercent}%`;
+    if (progressPercentage) progressPercentage.innerText = `${safePercent}%`;
     if (progressStatus) progressStatus.innerText = data.type || "Downloading...";
   });
 

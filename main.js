@@ -811,10 +811,10 @@ ipcMain.on('launch-game', async (event, config) => {
 
     launcher.on('progress', (e) => {
       let percentage = 0;
-      if (e.total && e.total > 0) {
+      if (e && typeof e.total === 'number' && e.total > 0 && typeof e.current === 'number') {
         percentage = Math.round((e.current / e.total) * 100);
       }
-      const currentType = e.type || "Downloading files...";
+      const currentType = (e && e.type) ? e.type : "Downloading files...";
 
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('launch-progress', { type: currentType, percent: percentage });
@@ -823,7 +823,9 @@ ipcMain.on('launch-game', async (event, config) => {
       if (percentage !== lastPercent || currentType !== lastProgressType) {
         lastPercent = percentage;
         lastProgressType = currentType;
-        sendConsoleLog('info', `[Download] ${currentType}: ${percentage}%`);
+        if (!isNaN(percentage)) {
+          sendConsoleLog('info', `[Download] ${currentType}: ${percentage}%`);
+        }
       }
     });
 
