@@ -810,7 +810,10 @@ ipcMain.on('launch-game', async (event, config) => {
     let lastProgressType = '';
 
     launcher.on('progress', (e) => {
-      const percentage = Math.round((e.current / e.total) * 100);
+      let percentage = 0;
+      if (e.total && e.total > 0) {
+        percentage = Math.round((e.current / e.total) * 100);
+      }
       const currentType = e.type || "Downloading files...";
 
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -936,7 +939,7 @@ ipcMain.handle('download-content-file', async (event, { projectId, version = '1.
 
   response.data.on('data', (chunk) => {
     downloadedLength += chunk.length;
-    if (totalLength) {
+    if (totalLength && totalLength > 0) {
       const percent = Math.round((downloadedLength / totalLength) * 100);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('launch-progress', { type: `Downloading ${fileInfo.filename}...`, percent });
@@ -977,7 +980,7 @@ ipcMain.handle('download-content-version-id', async (event, { projectId, version
 
   response.data.on('data', (chunk) => {
     downloadedLength += chunk.length;
-    if (totalLength) {
+    if (totalLength && totalLength > 0) {
       const percent = Math.round((downloadedLength / totalLength) * 100);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('launch-progress', { type: `Downloading ${fileInfo.filename}...`, percent });
