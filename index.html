@@ -1352,12 +1352,15 @@
   });
 
   ipcRenderer.on('login-success', (event, accountData) => {
-    activeAccount = accountData;
+    activeAccount = {
+      ...accountData,
+      lastRefreshed: Date.now()
+    };
     const existingIndex = savedAccounts.findIndex(acc => acc.uuid === accountData.uuid);
     if (existingIndex !== -1) {
-      savedAccounts[existingIndex] = accountData;
+      savedAccounts[existingIndex] = activeAccount;
     } else {
-      savedAccounts.push(accountData);
+      savedAccounts.push(activeAccount);
     }
     localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
     localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
@@ -1402,28 +1405,36 @@
     if (statusText) statusText.innerText = "Status: Validating session token...";
 
     if (activeAccount.refreshToken) {
-      const refreshResult = await ipcRenderer.invoke('refresh-account-session', activeAccount);
+      const lastRefreshed = activeAccount.lastRefreshed || 0;
+      const hoursSinceRefresh = (Date.now() - lastRefreshed) / (1000 * 60 * 60);
 
-      if (refreshResult.success) {
-        activeAccount = refreshResult.account;
-        
-        const accIndex = savedAccounts.findIndex(a => a.uuid === activeAccount.uuid);
-        if (accIndex !== -1) savedAccounts[accIndex] = activeAccount;
-        
-        localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
-        localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
-        
-        userAuthToken = activeAccount.mclcAuth;
-        if (statusText) statusText.innerText = "Status: Session successfully renewed!";
+      if (hoursSinceRefresh > 6 || !activeAccount.lastRefreshed) {
+        const refreshResult = await ipcRenderer.invoke('refresh-account-session', activeAccount);
+
+        if (refreshResult.success) {
+          activeAccount = refreshResult.account;
+          activeAccount.lastRefreshed = Date.now();
+          
+          const accIndex = savedAccounts.findIndex(a => a.uuid === activeAccount.uuid);
+          if (accIndex !== -1) savedAccounts[accIndex] = activeAccount;
+          
+          localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
+          localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
+          
+          userAuthToken = activeAccount.mclcAuth;
+          if (statusText) statusText.innerText = "Status: Session successfully renewed!";
+        } else {
+          console.warn("[Auth] Token refresh failed:", refreshResult.message);
+          if (statusText) statusText.innerText = "Status: Session expired. Re-authentication required.";
+          
+          playBtn.disabled = false;
+          playBtn.innerText = "Launch Game";
+          
+          document.getElementById('session-expired-modal')?.classList.remove('hidden');
+          return;
+        }
       } else {
-        console.warn("[Auth] 90-day token expired or invalid:", refreshResult.message);
-        if (statusText) statusText.innerText = "Status: Session expired. Re-authentication required.";
-        
-        playBtn.disabled = false;
-        playBtn.innerText = "Launch Game";
-        
-        document.getElementById('session-expired-modal')?.classList.remove('hidden');
-        return;
+        console.log("[Auth] Token is fresh. Skipping forced refresh.");
       }
     }
 
