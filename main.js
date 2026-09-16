@@ -389,14 +389,17 @@ function createWindow() {
       try {
         globalChatSocket.send(JSON.stringify({
           type: 'logout',
-          username: currentActiveUsername
+          username: currentActiveUsername,
+          timestamp: Date.now()
         }));
       } catch (err) {}
 
       setTimeout(() => {
         try { globalChatSocket.close(); } catch {}
         globalChatSocket = null;
-        mainWindow.destroy();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.destroy();
+        }
       }, 150);
     }
   });
@@ -486,6 +489,24 @@ function connectGlobalChat(username) {
 
   globalChatSocket.on('error', (err) => {});
 }
+
+// --- SHUTDOWN CLEANUP HOOK ---
+ipcMain.on('app-shutdown-cleanup', (event, { username }) => {
+  if (!username) return;
+  console.log(`[TuxMain] Received shutdown cleanup hook for: ${username}`);
+  
+  if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
+    try {
+      globalChatSocket.send(JSON.stringify({
+        type: 'logout',
+        username: username,
+        timestamp: Date.now()
+      }));
+    } catch (err) {
+      console.warn("[TuxMain] Failed to send logout packet on shutdown:", err.message);
+    }
+  }
+});
 
 ipcMain.handle('init-global-chat', (event, username) => {
   if (username) {
@@ -580,7 +601,7 @@ ipcMain.handle('remove-friend', async (event, { targetUsername, currentUser }) =
   }
 });
 
-// --- CLIPBOARD COPY ROUTINE ONLY (AUTO-JOIN REMOVED) ---
+// --- CLIPBOARD COPY ROUTINE ONLY ---
 ipcMain.handle('copy-server-ip', async (event, rawIp) => {
   try {
     if (!rawIp || typeof rawIp !== 'string') {

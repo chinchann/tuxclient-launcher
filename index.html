@@ -37,6 +37,132 @@
       background: #14141F;
       padding: 0 10px;
     }
+
+    /* --- CUSTOM MODAL & TOAST STYLING --- */
+    .tux-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 13, 17, 0.85);
+      backdrop-filter: blur(6px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .tux-modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .tux-modal-card {
+      background: #14141F;
+      border: 1px solid #1E1E2A;
+      border-radius: 12px;
+      padding: 24px;
+      width: 360px;
+      text-align: center;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+      transform: scale(0.95);
+      transition: transform 0.2s ease;
+    }
+    .tux-modal-overlay.active .tux-modal-card {
+      transform: scale(1);
+    }
+    .tux-modal-title {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .tux-modal-desc {
+      color: #9CA3AF;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .tux-modal-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .tux-btn-primary {
+      background: #A855F7;
+      color: #fff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    .tux-btn-primary:hover {
+      background: #9333EA;
+    }
+    .tux-btn-danger {
+      background: #EF4444;
+      color: #fff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    .tux-btn-danger:hover {
+      background: #DC2626;
+    }
+    .tux-btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: #E2E8F0;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    .tux-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Toast Notifications */
+    #tux-toast-container {
+      position: fixed;
+      bottom: 40px;
+      right: 24px;
+      z-index: 10001;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .tux-toast {
+      background: #14141F;
+      border: 1px solid #A855F7;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      pointer-events: auto;
+      animation: slideInRight 0.3s ease forwards, fadeOut 0.3s ease 3.7s forwards;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; transform: translateY(10px); }
+    }
   </style>
 </head>
 <body>
@@ -392,6 +518,20 @@
     </div>
   </div>
 
+  <!-- CUSTOM UI MODAL CONTAINER -->
+  <div id="tux-custom-modal" class="tux-modal-overlay">
+    <div class="tux-modal-card">
+      <h3 id="tux-modal-title" class="tux-modal-title">Notice</h3>
+      <p id="tux-modal-desc" class="tux-modal-desc">Message goes here...</p>
+      <div id="tux-modal-buttons" class="tux-modal-buttons">
+        <button id="tux-modal-ok" class="tux-btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="tux-toast-container"></div>
+
   <div id="update-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
     <div style="background: #14141F; border: 1px solid #1E1E2A; border-radius: 12px; padding: 28px; width: 420px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="background: rgba(168, 85, 247, 0.1); color: #a855f7; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px;">SYSTEM UPDATE</div>
@@ -453,6 +593,135 @@
 
   <script>
   const { ipcRenderer } = require('electron');
+
+  // --- CUSTOM MODAL & TOAST HELPERS ---
+  function showTuxAlert(title, message, callback) {
+    const overlay = document.getElementById('tux-custom-modal');
+    const titleEl = document.getElementById('tux-modal-title');
+    const descEl = document.getElementById('tux-modal-desc');
+    const btnContainer = document.getElementById('tux-modal-buttons');
+
+    titleEl.innerText = title;
+    descEl.innerText = message;
+    btnContainer.innerHTML = `<button id="tux-modal-ok" class="tux-btn-primary">OK</button>`;
+
+    overlay.classList.add('active');
+
+    document.getElementById('tux-modal-ok').onclick = () => {
+      overlay.classList.remove('active');
+      if (callback) callback();
+    };
+  }
+
+  function showTuxConfirm(title, message, onConfirm, onCancel) {
+    const overlay = document.getElementById('tux-custom-modal');
+    const titleEl = document.getElementById('tux-modal-title');
+    const descEl = document.getElementById('tux-modal-desc');
+    const btnContainer = document.getElementById('tux-modal-buttons');
+
+    titleEl.innerText = title;
+    descEl.innerText = message;
+    btnContainer.innerHTML = `
+      <button id="tux-modal-cancel" class="tux-btn-secondary">Cancel</button>
+      <button id="tux-modal-confirm" class="tux-btn-danger">Confirm</button>
+    `;
+
+    overlay.classList.add('active');
+
+    document.getElementById('tux-modal-cancel').onclick = () => {
+      overlay.classList.remove('active');
+      if (onCancel) onCancel();
+    };
+
+    document.getElementById('tux-modal-confirm').onclick = () => {
+      overlay.classList.remove('active');
+      if (onConfirm) onConfirm();
+    };
+  }
+
+  function showTuxToast(message) {
+    const container = document.getElementById('tux-toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'tux-toast';
+    toast.innerHTML = `
+      <span style="color: #A855F7; font-size: 16px;">✨</span>
+      <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 4000);
+  }
+
+  // --- LOCAL STATE PERSISTENCE HELPERS ---
+  const CACHE_KEY_FRIENDS = 'tux_cached_friends';
+  const CACHE_KEY_LASTSEEN = 'tux_cached_last_seen';
+
+  function saveFriendsToLocalCache(friendsArray) {
+    try {
+      const map = {};
+      friendsArray.forEach(f => {
+        const name = typeof f === 'string' ? f : (f.username || f.name);
+        if (name) {
+          map[name.toLowerCase().trim()] = f;
+        }
+      });
+      localStorage.setItem(CACHE_KEY_FRIENDS, JSON.stringify(map));
+    } catch (err) {
+      console.error("[Cache] Failed to save friends list to local storage:", err);
+    }
+  }
+
+  function loadFriendsFromLocalCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY_FRIENDS);
+      if (!raw) return [];
+      const map = JSON.parse(raw);
+      return Object.values(map);
+    } catch (err) {
+      console.error("[Cache] Failed to load friends from local storage:", err);
+      return [];
+    }
+  }
+
+  function saveLastSeenToLocalCache(username, timestamp) {
+    try {
+      if (!username) return;
+      const raw = localStorage.getItem(CACHE_KEY_LASTSEEN) || '{}';
+      const map = JSON.parse(raw);
+      map[username.toLowerCase().trim()] = timestamp;
+      localStorage.setItem(CACHE_KEY_LASTSEEN, JSON.stringify(map));
+    } catch (err) {
+      console.error("[Cache] Failed to save last seen timestamp:", err);
+    }
+  }
+
+  function getLastSeenFromLocalCache(username) {
+    try {
+      if (!username) return null;
+      const raw = localStorage.getItem(CACHE_KEY_LASTSEEN);
+      if (!raw) return null;
+      const map = JSON.parse(raw);
+      return map[username.toLowerCase().trim()] || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // --- LIFECYCLE SHUTDOWN HOOK ---
+  window.addEventListener('beforeunload', (e) => {
+    const activeUser = currentUsername || (activeAccount ? activeAccount.name : null);
+    if (activeUser) {
+      console.log("[Lifecycle] Application closing. Saving final states and notifying backend...");
+      saveLastSeenToLocalCache(activeUser, Date.now());
+      try {
+        ipcRenderer.send('app-shutdown-cleanup', { username: activeUser });
+      } catch (err) {}
+    }
+  });
 
   function showDesktopNotification(title, body, iconUrl) {
     const sound = document.getElementById('notification-sound');
@@ -573,9 +842,21 @@
     return `${month}/${day}/${year}`;
   }
 
-  function formatOfflineDuration(lastSeenMs) {
-    if (!lastSeenMs) return 'Offline';
-    const diffMs = Math.max(0, Date.now() - Number(lastSeenMs));
+  function formatOfflineDuration(lastSeenMs, friendUsername) {
+    let effectiveTimestamp = Number(lastSeenMs);
+    
+    if ((!effectiveTimestamp || isNaN(effectiveTimestamp) || effectiveTimestamp <= 0) && friendUsername) {
+      const cachedLastSeen = getLastSeenFromLocalCache(friendUsername);
+      if (cachedLastSeen) {
+        effectiveTimestamp = Number(cachedLastSeen);
+      }
+    }
+
+    if (!effectiveTimestamp || isNaN(effectiveTimestamp) || effectiveTimestamp <= 0) {
+      return 'Offline';
+    }
+
+    const diffMs = Math.max(0, Date.now() - effectiveTimestamp);
     const mins = Math.floor(diffMs / (1000 * 60));
     const hrs = Math.floor(mins / 60);
     const days = Math.floor(hrs / 24);
@@ -652,6 +933,7 @@
     }
 
     hideContextMenu();
+    document.body.focus();
   });
 
   unfriendBtn?.addEventListener('click', async (e) => {
@@ -660,20 +942,27 @@
 
     const friendName = activeContextTarget;
     hideContextMenu();
+    document.body.focus();
 
-    if (confirm(`Are you sure you want to remove ${friendName} from your friends?`)) {
-      const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
-      const res = await ipcRenderer.invoke('remove-friend', {
-        targetUsername: friendName,
-        currentUser: currentUser
-      });
+    // CUSTOM MODAL INSTEAD OF NATIVE confirm()
+    showTuxConfirm(
+      'Remove Friend',
+      `Are you sure you want to remove ${friendName} from your friends?`,
+      async () => {
+        const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
+        const res = await ipcRenderer.invoke('remove-friend', {
+          targetUsername: friendName,
+          currentUser: currentUser
+        });
 
-      if (res.success) {
-        removeFriendFromListUI(friendName);
-      } else {
-        alert(`Failed to unfriend ${friendName}.`);
+        if (res.success) {
+          removeFriendFromListUI(friendName);
+          showTuxToast(`Removed ${friendName} from friends.`);
+        } else {
+          showTuxAlert('Error', `Failed to unfriend ${friendName}.`);
+        }
       }
-    }
+    );
   });
 
   function removeFriendFromListUI(friendUsername) {
@@ -790,7 +1079,7 @@
     const friendsContainer = document.getElementById('friends-list-container');
     if (!friendsContainer || (!activeAccount && !currentUsername)) return;
 
-    const friendUsername = typeof friendData === 'string' ? friendData : (friendData.username || friendData.name);
+    const friendUsername = typeof friendData === 'string' ? friendData : (friendData.username || friendData.name || friendData.from);
     if (!friendUsername) return;
 
     const myUsername = currentUsername || (activeAccount ? activeAccount.name : '');
@@ -806,17 +1095,35 @@
     const friendKey = friendUsername.toLowerCase().trim();
     currentFriendsList.add(friendKey);
 
-    let rawStatus = typeof friendData === 'string' ? 'online' : (friendData.status || (friendData.isOnline ? 'online' : 'offline'));
+    const rawStatus = typeof friendData === 'object' ? (friendData.status || '') : '';
+    const isOnlineFlag = typeof friendData === 'object' ? friendData.isOnline : undefined;
     const session = typeof friendData === 'object' ? friendData.session : null;
     const isHosting = session && session.serverIp;
     const startTime = session?.startTime || null;
-    const lastSeen = typeof friendData === 'object' && friendData.lastSeen ? friendData.lastSeen : Date.now();
 
-    let isOnline = rawStatus === 'online' || rawStatus === 'hosting' || rawStatus === 'playing';
+    let isOnline = false;
+    if (isOnlineFlag === true || isOnlineFlag === 'true') {
+      isOnline = true;
+    } else if (rawStatus.toLowerCase() === 'online' || rawStatus.toLowerCase() === 'playing' || rawStatus.toLowerCase() === 'hosting' || rawStatus.toLowerCase() === 'active') {
+      isOnline = true;
+    } else if (isHosting) {
+      isOnline = true;
+    } else if (typeof friendData === 'string') {
+      isOnline = true;
+    }
+
+    let lastSeen = typeof friendData === 'object' && friendData.lastSeen ? friendData.lastSeen : null;
+    if (isOnline) {
+      lastSeen = null;
+      saveLastSeenToLocalCache(friendUsername, null);
+    } else {
+      lastSeen = lastSeen || getLastSeenFromLocalCache(friendUsername);
+    }
+
     let statusClass = isOnline ? 'status-online' : 'status-offline';
-    let statusTextLabel = isOnline ? 'Online' : formatOfflineDuration(lastSeen);
+    let statusTextLabel = isOnline ? 'Online' : formatOfflineDuration(lastSeen, friendUsername);
 
-    if (isHosting || rawStatus === 'playing') {
+    if (isHosting || rawStatus.toLowerCase() === 'playing' || rawStatus.toLowerCase() === 'hosting') {
       statusClass = 'status-playing';
       
       const hostLabel = (session && session.serverIp)
@@ -902,7 +1209,7 @@
         activeOfflineTimers[friendUsername] = setInterval(() => {
           const statusTextEl = document.querySelector(`#friend-card-${friendKey} .friend-status-text`);
           if (statusTextEl && statusTextEl.classList.contains('status-offline')) {
-            statusTextEl.innerText = formatOfflineDuration(lastSeen);
+            statusTextEl.innerText = formatOfflineDuration(lastSeen, friendUsername);
           } else {
             clearInterval(activeOfflineTimers[friendUsername]);
           }
@@ -961,6 +1268,16 @@
 
     if (packet.type === 'initial_data') {
       if (packet.friends && Array.isArray(packet.friends)) {
+        packet.friends.forEach(f => {
+          const name = f.username || f.name;
+          const statusStr = (f.status || '').toLowerCase();
+          const online = statusStr === 'online' || statusStr === 'playing' || statusStr === 'hosting' || f.isOnline === true;
+          if (online) {
+            saveLastSeenToLocalCache(name, null);
+            f.lastSeen = null;
+          }
+        });
+        saveFriendsToLocalCache(packet.friends);
         packet.friends.forEach(f => renderFriendInList(f));
       }
       if (packet.pendingRequests && Array.isArray(packet.pendingRequests)) {
@@ -1011,19 +1328,35 @@
       }
     }
 
-    if (packet.type === 'user_status_change' || packet.type === 'presence_update') {
+    if (packet.type === 'user_status_change' || packet.type === 'presence_update' || packet.type === 'status') {
       const myName = currentUsername || (activeAccount ? activeAccount.name : '');
-      const incomingUser = packet.username || packet.from;
+      const incomingUser = packet.username || packet.from || packet.user;
 
-      console.log(`[UI Status Update] Evaluating status change for incoming user: "${incomingUser}" (Self: "${myName}")`);
+      console.log(`[UI Status Update] Evaluating status change for incoming user: "${incomingUser}" (Self: "${myName}")`, packet);
 
       if (incomingUser && (!myName || incomingUser.toLowerCase().trim() !== myName.toLowerCase().trim())) {
-        console.log(`[UI Status Update] Rendering updated friend card for: ${incomingUser}`, packet.session);
+        let finalStatus = packet.status || (packet.isOnline ? 'online' : 'offline');
+        let finalLastSeen = packet.lastSeen;
+
+        const isNowOffline = finalStatus.toLowerCase() === 'offline' || finalStatus === false || packet.isOnline === false;
+
+        if (isNowOffline) {
+          finalStatus = 'offline';
+          if (!finalLastSeen) {
+            finalLastSeen = getLastSeenFromLocalCache(incomingUser) || Date.now();
+          }
+          saveLastSeenToLocalCache(incomingUser, finalLastSeen);
+        } else {
+          saveLastSeenToLocalCache(incomingUser, null);
+          finalLastSeen = null;
+        }
+
         renderFriendInList({
           username: incomingUser,
-          status: packet.status || 'playing',
-          lastSeen: packet.lastSeen,
-          session: packet.session
+          status: finalStatus,
+          lastSeen: finalLastSeen,
+          session: packet.session,
+          isOnline: packet.isOnline
         });
       }
     }
@@ -1060,8 +1393,15 @@
     }
 
     if (packet.type === 'friend_accept') {
-      alert(`${packet.from} accepted your friend request!`);
+      // CUSTOM TOAST INSTEAD OF NATIVE alert()
+      showTuxToast(`${packet.from} accepted your friend request!`);
       renderFriendInList({ username: packet.from, status: 'online' });
+      
+      const currentCached = loadFriendsFromLocalCache();
+      if (!currentCached.some(f => (f.username || f.name).toLowerCase() === packet.from.toLowerCase())) {
+        currentCached.push({ username: packet.from, status: 'online', lastSeen: null });
+        saveFriendsToLocalCache(currentCached);
+      }
     }
 
     if (packet.type === 'global_chat') {
@@ -1108,22 +1448,22 @@
     const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '');
 
     if (!senderUsername) {
-      alert('You must be signed in to send friend requests.');
+      showTuxAlert('Error', 'You must be signed in to send friend requests.');
       return;
     }
 
     if (!targetUsername) {
-      alert('Please enter a username.');
+      showTuxAlert('Error', 'Please enter a username.');
       return;
     }
 
     if (targetUsername.toLowerCase() === senderUsername.toLowerCase()) {
-      alert('You cannot add yourself as a friend.');
+      showTuxAlert('Error', 'You cannot add yourself as a friend.');
       return;
     }
 
     if (currentFriendsList.has(targetUsername.toLowerCase())) {
-      alert(`You are already friends with ${targetUsername}.`);
+      showTuxAlert('Notice', `You are already friends with ${targetUsername}.`);
       return;
     }
 
@@ -1133,10 +1473,11 @@
     });
 
     if (result.success) {
-      alert(result.message);
+      // CUSTOM TOAST/MODAL INSTEAD OF NATIVE alert()
+      showTuxToast(`Friend request sent to ${targetUsername}!`);
       if (input) input.value = '';
     } else {
-      alert(`Error: ${result.message}`);
+      showTuxAlert('Error', `Error: ${result.message}`);
     }
   };
 
@@ -1153,7 +1494,14 @@
       if (card) card.remove();
 
       if (action === 'accept') {
+        showTuxToast(`You are now friends with ${targetUsername}!`);
         renderFriendInList({ username: targetUsername, status: 'online' });
+        
+        const currentCached = loadFriendsFromLocalCache();
+        if (!currentCached.some(f => (f.username || f.name).toLowerCase() === targetUsername.toLowerCase())) {
+          currentCached.push({ username: targetUsername, status: 'online', lastSeen: null });
+          saveFriendsToLocalCache(currentCached);
+        }
       }
     }
   };
@@ -1166,7 +1514,7 @@
     const sender = currentUsername || (activeAccount ? activeAccount.name : '');
 
     if (!sender) {
-      alert("Sign in to send messages.");
+      showTuxAlert('Error', "Sign in to send messages.");
       return;
     }
 
@@ -1183,7 +1531,7 @@
     const timestamp = Date.now();
 
     if (!sender) {
-      alert("Sign in to send messages.");
+      showTuxAlert('Error', "Sign in to send messages.");
       return;
     }
 
@@ -1477,6 +1825,17 @@
     updateAccountUI();
     setupSkinControls();
 
+    const cachedFriends = loadFriendsFromLocalCache();
+    if (cachedFriends.length > 0) {
+      console.log("[UI] Loading cached friends list into UI prior to network sync...");
+      cachedFriends.forEach(f => {
+        if (!f.lastSeen) {
+          f.lastSeen = getLastSeenFromLocalCache(f.username || f.name);
+        }
+        renderFriendInList(f);
+      });
+    }
+
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
     }
@@ -1663,7 +2022,7 @@
       searchModrinth();
       closeModSidebar();
     } catch (err) {
-      alert(`Installation failed: ${err.message}`);
+      showTuxAlert('Error', `Installation failed: ${err.message}`);
       if (progressContainer) progressContainer.classList.add('hidden');
     }
   };
@@ -1794,7 +2153,7 @@
         searchShadersModrinth();
       }
     } catch (err) {
-      alert(`Download failed: ${err.message}`);
+      showTuxAlert('Error', `Download failed: ${err.message}`);
       if (progressContainer) progressContainer.classList.add('hidden');
     }
   };
