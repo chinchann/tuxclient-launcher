@@ -224,11 +224,14 @@
           <div class="settings-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
               <h3 style="border: none; margin: 0; padding: 0;">Saved Accounts</h3>
-              <button id="add-account-btn" class="download-btn">Add Account</button>
+              <div style="display: flex; gap: 8px;">
+                <button id="add-offline-account-btn" class="secondary-btn">Add Offline Account</button>
+                <button id="add-account-btn" class="download-btn">Microsoft Login</button>
+              </div>
             </div>
             
             <div id="accounts-list" style="display: flex; flex-direction: column; gap: 10px;">
-              <p class="subtext">No accounts saved yet. Click "Add Account" to sign in with Microsoft.</p>
+              <p class="subtext">No accounts saved yet. Click "Add Account" to sign in with Microsoft or add an offline account.</p>
             </div>
           </div>
         </div>
@@ -518,6 +521,23 @@
     </div>
   </div>
 
+  <!-- OFFLINE ACCOUNT MODAL -->
+  <div id="offline-account-modal" class="tux-modal-overlay">
+    <div class="tux-modal-card">
+      <h3 class="tux-modal-title">Add Offline Account</h3>
+      <p class="tux-modal-desc">Enter your desired offline Minecraft username below:</p>
+      
+      <div style="margin-bottom: 20px;">
+        <input type="text" id="offline-username-input" placeholder="e.g. Steve_Offline" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; box-sizing: border-box;">
+      </div>
+
+      <div class="tux-modal-buttons">
+        <button id="offline-modal-cancel" class="tux-btn-secondary">Cancel</button>
+        <button id="offline-modal-submit" class="tux-btn-primary">Add Account</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CUSTOM UI MODAL CONTAINER -->
   <div id="tux-custom-modal" class="tux-modal-overlay">
     <div class="tux-modal-card">
@@ -656,20 +676,145 @@
     }, 4000);
   }
 
-  // --- LOCAL STATE PERSISTENCE HELPERS ---
-  const CACHE_KEY_FRIENDS = 'tux_cached_friends';
+  // --- OFFLINE ACCOUNT HANDLING ---
+  const offlineModal = document.getElementById('offline-account-modal');
+  const addOfflineBtn = document.getElementById('add-offline-account-btn');
+  const offlineSubmitBtn = document.getElementById('offline-modal-submit');
+  const offlineCancelBtn = document.getElementById('offline-modal-cancel');
+  const offlineInput = document.getElementById('offline-username-input');
+
+  addOfflineBtn?.addEventListener('click', () => {
+    if (offlineInput) offlineInput.value = '';
+    offlineModal?.classList.add('active');
+    setTimeout(() => offlineInput?.focus(), 50);
+  });
+
+  offlineCancelBtn?.addEventListener('click', () => {
+    offlineModal?.classList.remove('active');
+  });
+
+  offlineSubmitBtn?.addEventListener('click', () => {
+    const username = offlineInput ? offlineInput.value.trim() : '';
+    if (!username) {
+      showTuxAlert('Error', 'Please enter a valid username.');
+      return;
+    }
+
+    if (username.length < 3) {
+      showTuxAlert('Error', 'Username must be at least 3 characters long.');
+      return;
+    }
+
+    offlineModal?.classList.remove('active');
+    registerOfflineAccount(username);
+  });
+
+  offlineInput?.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') offlineSubmitBtn.click();
+  });
+
+  function generateOfflineUUID(username) {
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = ((hash << 5) - hash) + username.charCodeAt(i);
+      hash |= 0;
+    }
+    const hex = Math.abs(hash).toString(16).padStart(8, '0');
+    const fullHex = (hex + hex + hex + hex + hex).substring(0, 32);
+    return `${fullHex.slice(0,8)}-${fullHex.slice(8,12)}-4${fullHex.slice(12,15)}-8${fullHex.slice(15,18)}-${fullHex.slice(18,30)}`;
+  }
+
+  function registerOfflineAccount(username) {
+    const cleanName = username.trim();
+    const offlineUuid = generateOfflineUUID(cleanName);
+
+    const offlineAccount = {
+      name: cleanName,
+      uuid: offlineUuid,
+      type: 'offline',
+      mclcAuth: {
+        access_token: "offline_access_token",
+        client_token: "offline_client_token",
+        uuid: offlineUuid,
+        name: cleanName,
+        user_type: "legacy"
+      },
+      lastRefreshed: Date.now()
+    };
+
+    const existingIndex = savedAccounts.findIndex(acc => acc.name.toLowerCase() === cleanName.toLowerCase());
+    if (existingIndex !== -1) {
+      savedAccounts[existingIndex] = offlineAccount;
+    } else {
+      savedAccounts.push(offlineAccount);
+    }
+
+    localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
+    activeAccount = offlineAccount;
+    localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
+
+    updateAccountUI();
+    showTuxToast(`Added offline account: ${cleanName}`);
+  }
+
+  // --- ACCOUNT-SCOPED LOCAL CACHE & MANUAL CASING OVERRIDE MAP ---
   const CACHE_KEY_LASTSEEN = 'tux_cached_last_seen';
+
+  const MANUAL_CASING_OVERRIDES = {
+    "_graptor_": "_Graptor_"
+  };
+
+  function getActiveAccountCacheKey() {
+    const user = currentUsername || (activeAccount ? activeAccount.name : 'guest');
+    return `tux_cached_friends_${user.trim().toLowerCase()}`;
+  }
+
+  async function resolveCorrectCasing(username) {
+    if (!username) return username;
+    const clean = username.trim();
+    const lowerKey = clean.toLowerCase();
+
+    if (MANUAL_CASING_OVERRIDES[lowerKey]) {
+      return MANUAL_CASING_OVERRIDES[lowerKey];
+    }
+
+    const cachedFriends = loadFriendsFromLocalCache();
+    const found = cachedFriends.find(f => {
+      const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
+      return fName && fName.toLowerCase() === lowerKey;
+    });
+    if (found && typeof found === 'object' && (found.pristineName || found.username)) {
+      return found.pristineName || found.username;
+    }
+
+    try {
+      const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(clean)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.name) {
+          return data.name;
+        }
+      }
+    } catch (err) {}
+
+    return clean;
+  }
 
   function saveFriendsToLocalCache(friendsArray) {
     try {
+      const cacheKey = getActiveAccountCacheKey();
       const map = {};
       friendsArray.forEach(f => {
-        const name = typeof f === 'string' ? f : (f.username || f.name);
-        if (name) {
-          map[name.toLowerCase().trim()] = f;
+        const rawName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
+        if (rawName) {
+          const cleanName = rawName.trim();
+          const lower = cleanName.toLowerCase();
+          const pristine = MANUAL_CASING_OVERRIDES[lower] || f.pristineName || cleanName;
+          const friendObj = typeof f === 'string' ? { username: cleanName, pristineName: pristine } : { ...f, username: cleanName, pristineName: pristine };
+          map[lower] = friendObj;
         }
       });
-      localStorage.setItem(CACHE_KEY_FRIENDS, JSON.stringify(map));
+      localStorage.setItem(cacheKey, JSON.stringify(map));
     } catch (err) {
       console.error("[Cache] Failed to save friends list to local storage:", err);
     }
@@ -677,7 +822,8 @@
 
   function loadFriendsFromLocalCache() {
     try {
-      const raw = localStorage.getItem(CACHE_KEY_FRIENDS);
+      const cacheKey = getActiveAccountCacheKey();
+      const raw = localStorage.getItem(cacheKey);
       if (!raw) return [];
       const map = JSON.parse(raw);
       return Object.values(map);
@@ -692,7 +838,10 @@
       if (!username) return;
       const raw = localStorage.getItem(CACHE_KEY_LASTSEEN) || '{}';
       const map = JSON.parse(raw);
-      map[username.toLowerCase().trim()] = timestamp;
+      const cleanName = username.trim();
+      const lower = cleanName.toLowerCase();
+      const pristine = MANUAL_CASING_OVERRIDES[lower] || cleanName;
+      map[lower] = { pristineName: pristine, timestamp };
       localStorage.setItem(CACHE_KEY_LASTSEEN, JSON.stringify(map));
     } catch (err) {
       console.error("[Cache] Failed to save last seen timestamp:", err);
@@ -705,13 +854,13 @@
       const raw = localStorage.getItem(CACHE_KEY_LASTSEEN);
       if (!raw) return null;
       const map = JSON.parse(raw);
-      return map[username.toLowerCase().trim()] || null;
+      const entry = map[username.trim().toLowerCase()];
+      return entry ? entry.timestamp : null;
     } catch (err) {
       return null;
     }
   }
 
-  // --- LIFECYCLE SHUTDOWN HOOK ---
   window.addEventListener('beforeunload', (e) => {
     const activeUser = currentUsername || (activeAccount ? activeAccount.name : null);
     if (activeUser) {
@@ -925,11 +1074,10 @@
     e.stopPropagation();
     if (!activeContextTarget) return;
 
-    const targetKey = activeContextTarget.toLowerCase().trim();
-    if (mutedFriends.has(targetKey)) {
-      mutedFriends.delete(targetKey);
+    if (mutedFriends.has(activeContextTarget)) {
+      mutedFriends.delete(activeContextTarget);
     } else {
-      mutedFriends.add(targetKey);
+      mutedFriends.add(activeContextTarget);
     }
 
     hideContextMenu();
@@ -944,7 +1092,6 @@
     hideContextMenu();
     document.body.focus();
 
-    // CUSTOM MODAL INSTEAD OF NATIVE confirm()
     showTuxConfirm(
       'Remove Friend',
       `Are you sure you want to remove ${friendName} from your friends?`,
@@ -967,10 +1114,20 @@
 
   function removeFriendFromListUI(friendUsername) {
     if (!friendUsername) return;
-    const friendKey = friendUsername.toLowerCase().trim();
     
-    document.getElementById(`friend-card-${friendKey}`)?.remove();
-    currentFriendsList.delete(friendKey);
+    const existingCards = document.querySelectorAll(`[id^="friend-card-"]`);
+    existingCards.forEach(card => {
+      const storedName = card.getAttribute('data-username');
+      if (storedName && storedName.toLowerCase() === friendUsername.toLowerCase()) {
+        card.remove();
+      }
+    });
+
+    currentFriendsList.delete(friendUsername);
+    saveFriendsToLocalCache(loadFriendsFromLocalCache().filter(f => {
+      const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
+      return fName.toLowerCase() !== friendUsername.toLowerCase();
+    }));
 
     if (activeFriendTimers[friendUsername]) {
       clearInterval(activeFriendTimers[friendUsername]);
@@ -1075,16 +1232,17 @@
     }
   }
 
-  function renderFriendInList(friendData) {
+  async function renderFriendInList(friendData) {
     const friendsContainer = document.getElementById('friends-list-container');
     if (!friendsContainer || (!activeAccount && !currentUsername)) return;
 
-    const friendUsername = typeof friendData === 'string' ? friendData : (friendData.username || friendData.name || friendData.from);
-    if (!friendUsername) return;
+    let rawName = typeof friendData === 'string' ? friendData : (friendData.username || friendData.name || friendData.pristineName || friendData.from);
+    if (!rawName) return;
+
+    let friendUsername = await resolveCorrectCasing(rawName);
 
     const myUsername = currentUsername || (activeAccount ? activeAccount.name : '');
-
-    if (myUsername && friendUsername.toLowerCase().trim() === myUsername.toLowerCase().trim()) {
+    if (myUsername && friendUsername.toLowerCase() === myUsername.toLowerCase()) {
       return;
     }
 
@@ -1092,8 +1250,7 @@
       friendsContainer.innerHTML = '';
     }
 
-    const friendKey = friendUsername.toLowerCase().trim();
-    currentFriendsList.add(friendKey);
+    currentFriendsList.add(friendUsername);
 
     const rawStatus = typeof friendData === 'object' ? (friendData.status || '') : '';
     const isOnlineFlag = typeof friendData === 'object' ? friendData.isOnline : undefined;
@@ -1138,52 +1295,42 @@
     }
 
     const avatarUrl = `https://crafthead.net/avatar/${encodeURIComponent(friendUsername)}/36`;
-    let friendCard = document.getElementById(`friend-card-${friendKey}`);
-
-    if (friendCard) {
-      const statusText = friendCard.querySelector('.friend-status-text');
-      const timerEl = friendCard.querySelector('.session-timer');
-
-      if (statusText) {
-        statusText.innerText = statusTextLabel;
-        statusText.className = `friend-status-text ${statusClass}`;
+    
+    const allCards = friendsContainer.querySelectorAll('.friend-card-item');
+    allCards.forEach(card => {
+      const storedName = card.getAttribute('data-username');
+      if (storedName && storedName.toLowerCase() === friendUsername.toLowerCase()) {
+        card.remove();
       }
+    });
 
-      if (timerEl && startTime) {
-        timerEl.innerText = formatSessionDuration(startTime);
-        timerEl.classList.remove('hidden');
-      } else if (timerEl) {
-        timerEl.classList.add('hidden');
-      }
-    } else {
-      friendCard = document.createElement('div');
-      friendCard.id = `friend-card-${friendKey}`;
-      friendCard.className = 'friend-card-item';
+    const friendCard = document.createElement('div');
+    friendCard.className = 'friend-card-item';
+    friendCard.setAttribute('data-username', friendUsername);
 
-      friendCard.addEventListener('contextmenu', (e) => {
-        showContextMenu(e, friendCard, friendUsername, mutedFriends.has(friendKey));
-      });
+    friendCard.addEventListener('contextmenu', (e) => {
+      showContextMenu(e, friendCard, friendUsername, mutedFriends.has(friendUsername));
+    });
 
-      friendCard.innerHTML = `
-        <div class="friend-card-left">
-          <img src="${avatarUrl}" class="friend-avatar" alt="${friendUsername}" onerror="this.src='https://crafatar.com/avatars/steve?size=36&default=MSTEVE'">
-          <div class="friend-details">
-            <div class="friend-name-row">
-              <strong class="friend-name">${friendUsername}</strong>
-              <span class="session-timer badge ${startTime ? '' : 'hidden'}">
-                ${formatSessionDuration(startTime)}
-              </span>
-            </div>
-            <span class="friend-status-text ${statusClass}">${statusTextLabel}</span>
+    friendCard.innerHTML = `
+      <div class="friend-card-left">
+        <img src="${avatarUrl}" class="friend-avatar" alt="${friendUsername}" onerror="this.src='https://crafatar.com/avatars/steve?size=36&default=MSTEVE'">
+        <div class="friend-details">
+          <div class="friend-name-row">
+            <strong class="friend-name">${friendUsername}</strong>
+            <span class="session-timer badge ${startTime ? '' : 'hidden'}">
+              ${formatSessionDuration(startTime)}
+            </span>
           </div>
+          <span class="friend-status-text ${statusClass}">${statusTextLabel}</span>
         </div>
-        <div class="friend-card-right">
-          <button class="secondary-btn chat-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
-        </div>
-      `;
+      </div>
+      <div class="friend-card-right">
+        <button class="secondary-btn chat-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
+      </div>
+    `;
 
-      friendsContainer.appendChild(friendCard);
-    }
+    friendsContainer.appendChild(friendCard);
 
     if (startTime) {
       if (activeOfflineTimers[friendUsername]) {
@@ -1192,7 +1339,7 @@
       }
       if (activeFriendTimers[friendUsername]) clearInterval(activeFriendTimers[friendUsername]);
       activeFriendTimers[friendUsername] = setInterval(() => {
-        const timerEl = document.querySelector(`#friend-card-${friendKey} .session-timer`);
+        const timerEl = document.querySelector(`.friend-card-item[data-username="${CSS.escape(friendUsername)}"] .session-timer`);
         if (timerEl) {
           timerEl.innerText = formatSessionDuration(startTime);
         } else {
@@ -1207,7 +1354,7 @@
       if (!isOnline) {
         if (activeOfflineTimers[friendUsername]) clearInterval(activeOfflineTimers[friendUsername]);
         activeOfflineTimers[friendUsername] = setInterval(() => {
-          const statusTextEl = document.querySelector(`#friend-card-${friendKey} .friend-status-text`);
+          const statusTextEl = document.querySelector(`.friend-card-item[data-username="${CSS.escape(friendUsername)}"] .friend-status-text`);
           if (statusTextEl && statusTextEl.classList.contains('status-offline')) {
             statusTextEl.innerText = formatOfflineDuration(lastSeen, friendUsername);
           } else {
@@ -1267,8 +1414,12 @@
     console.log(`[UI SOCKET RECEIVED] Packet Type: "${packet ? packet.type : 'undefined'}"`, packet);
 
     if (packet.type === 'initial_data') {
+      const friendsContainer = document.getElementById('friends-list-container');
+      if (friendsContainer) friendsContainer.innerHTML = '';
+      currentFriendsList.clear();
+
       if (packet.friends && Array.isArray(packet.friends)) {
-        packet.friends.forEach(f => {
+        for (const f of packet.friends) {
           const name = f.username || f.name;
           const statusStr = (f.status || '').toLowerCase();
           const online = statusStr === 'online' || statusStr === 'playing' || statusStr === 'hosting' || f.isOnline === true;
@@ -1276,55 +1427,68 @@
             saveLastSeenToLocalCache(name, null);
             f.lastSeen = null;
           }
-        });
+        }
         saveFriendsToLocalCache(packet.friends);
-        packet.friends.forEach(f => renderFriendInList(f));
+        for (const f of packet.friends) {
+          await renderFriendInList(f);
+        }
       }
       if (packet.pendingRequests && Array.isArray(packet.pendingRequests)) {
         const requestsList = document.getElementById('friend-requests-list');
         if (requestsList && packet.pendingRequests.length > 0) {
           requestsList.innerHTML = '';
-          packet.pendingRequests.forEach(requester => {
+          for (const requester of packet.pendingRequests) {
+            const resolvedRequester = await resolveCorrectCasing(requester);
             const reqCard = document.createElement('div');
             reqCard.className = 'setting-row';
             reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
             reqCard.innerHTML = `
               <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                <img src="https://crafthead.net/avatar/${encodeURIComponent(requester)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
+                <img src="https://crafthead.net/avatar/${encodeURIComponent(resolvedRequester)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
                 <div class="setting-info" style="min-width: 0;">
-                  <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${requester}</strong></label>
+                  <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${resolvedRequester}</strong></label>
                   <span class="subtext">Wants to be your friend</span>
                 </div>
               </div>
               <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                <button class="download-btn" onclick="respondFriendRequest('${requester}', 'accept', this)">Accept</button>
-                <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${requester}', 'decline', this)">Decline</button>
+                <button class="download-btn" onclick="respondFriendRequest('${resolvedRequester}', 'accept', this)">Accept</button>
+                <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${resolvedRequester}', 'decline', this)">Decline</button>
               </div>
             `;
             requestsList.appendChild(reqCard);
-          });
+          }
         }
       }
 
       if (packet.chatLogs && Array.isArray(packet.chatLogs)) {
-        document.getElementById('chat-messages-container').innerHTML = '';
+        const globalContainer = document.getElementById('chat-messages-container');
+        if (globalContainer) globalContainer.innerHTML = '';
+        
+        activeChatHistory = { GLOBAL: [] };
         const myName = currentUsername || (activeAccount ? activeAccount.name : '');
 
-        packet.chatLogs.forEach(log => {
+        for (const log of packet.chatLogs) {
+          const resolvedSender = await resolveCorrectCasing(log.senderUuid);
           if (log.receiverUuid === 'GLOBAL') {
-            appendChatMessage('chat-messages-container', log.senderUuid, log.content, log.timestamp);
+            activeChatHistory.GLOBAL.push({
+              sender: resolvedSender,
+              text: log.content,
+              timestamp: log.timestamp
+            });
+            appendChatMessage('chat-messages-container', resolvedSender, log.content, log.timestamp);
           } else {
-            const friendKey = log.senderUuid === myName ? log.receiverUuid : log.senderUuid;
+            const resolvedReceiver = await resolveCorrectCasing(log.receiverUuid);
+            const friendKey = log.senderUuid === myName ? resolvedReceiver : resolvedSender;
             if (!activeChatHistory[friendKey]) activeChatHistory[friendKey] = [];
             
-            const displaySender = log.senderUuid === myName ? 'You' : log.senderUuid;
+            const displaySender = log.senderUuid === myName ? 'You' : resolvedSender;
             activeChatHistory[friendKey].push({
               sender: displaySender,
               text: log.content,
               timestamp: log.timestamp
             });
           }
-        });
+        }
       }
     }
 
@@ -1334,7 +1498,7 @@
 
       console.log(`[UI Status Update] Evaluating status change for incoming user: "${incomingUser}" (Self: "${myName}")`, packet);
 
-      if (incomingUser && (!myName || incomingUser.toLowerCase().trim() !== myName.toLowerCase().trim())) {
+      if (incomingUser && (!myName || incomingUser.toLowerCase() !== myName.toLowerCase())) {
         let finalStatus = packet.status || (packet.isOnline ? 'online' : 'offline');
         let finalLastSeen = packet.lastSeen;
 
@@ -1351,7 +1515,7 @@
           finalLastSeen = null;
         }
 
-        renderFriendInList({
+        await renderFriendInList({
           username: incomingUser,
           status: finalStatus,
           lastSeen: finalLastSeen,
@@ -1372,20 +1536,21 @@
       if (requestsList) {
         if (requestsList.querySelector('.subtext')) requestsList.innerHTML = '';
 
+        const resolvedFrom = await resolveCorrectCasing(packet.from);
         const reqCard = document.createElement('div');
         reqCard.className = 'setting-row';
         reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
         reqCard.innerHTML = `
           <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-            <img src="https://crafthead.net/avatar/${encodeURIComponent(packet.from)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
+            <img src="https://crafthead.net/avatar/${encodeURIComponent(resolvedFrom)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
             <div class="setting-info" style="min-width: 0;">
-              <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${packet.from}</strong></label>
+              <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${resolvedFrom}</strong></label>
               <span class="subtext">Wants to be your friend</span>
             </div>
           </div>
           <div style="display: flex; gap: 6px; flex-shrink: 0;">
-            <button class="download-btn" onclick="respondFriendRequest('${packet.from}', 'accept', this)">Accept</button>
-            <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${packet.from}', 'decline', this)">Decline</button>
+            <button class="download-btn" onclick="respondFriendRequest('${resolvedFrom}', 'accept', this)">Accept</button>
+            <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${resolvedFrom}', 'decline', this)">Decline</button>
           </div>
         `;
         requestsList.appendChild(reqCard);
@@ -1393,51 +1558,59 @@
     }
 
     if (packet.type === 'friend_accept') {
-      // CUSTOM TOAST INSTEAD OF NATIVE alert()
-      showTuxToast(`${packet.from} accepted your friend request!`);
-      renderFriendInList({ username: packet.from, status: 'online' });
+      const resolvedFrom = await resolveCorrectCasing(packet.from);
+      showTuxToast(`${resolvedFrom} accepted your friend request!`);
+      await renderFriendInList({ username: resolvedFrom, status: 'online' });
       
       const currentCached = loadFriendsFromLocalCache();
-      if (!currentCached.some(f => (f.username || f.name).toLowerCase() === packet.from.toLowerCase())) {
-        currentCached.push({ username: packet.from, status: 'online', lastSeen: null });
+      if (!currentCached.some(f => (f.username || f.name || f.pristineName).toLowerCase() === resolvedFrom.toLowerCase())) {
+        currentCached.push({ username: resolvedFrom, pristineName: resolvedFrom, status: 'online', lastSeen: null });
         saveFriendsToLocalCache(currentCached);
       }
     }
 
     if (packet.type === 'global_chat') {
-      appendChatMessage('chat-messages-container', packet.sender || 'Player', packet.text, packet.timestamp);
+      const resolvedSender = await resolveCorrectCasing(packet.sender || 'Player');
+      if (!activeChatHistory.GLOBAL) activeChatHistory.GLOBAL = [];
+      activeChatHistory.GLOBAL.push({
+        sender: resolvedSender,
+        text: packet.text,
+        timestamp: packet.timestamp || Date.now()
+      });
+
+      appendChatMessage('chat-messages-container', resolvedSender, packet.text, packet.timestamp);
       
       const myName = currentUsername || (activeAccount ? activeAccount.name : '');
-      if (packet.sender !== myName && chatPanel.classList.contains('hidden')) {
+      if (resolvedSender !== myName && chatPanel.classList.contains('hidden')) {
         showDesktopNotification(
-          `Global Chat: ${packet.sender}`,
+          `Global Chat: ${resolvedSender}`,
           packet.text,
-          `https://crafthead.net/avatar/${encodeURIComponent(packet.sender)}/64`
+          `https://crafthead.net/avatar/${encodeURIComponent(resolvedSender)}/64`
         );
       }
     }
 
     if (packet.type === 'chat_message') {
-      const friendKey = packet.from;
+      const resolvedFrom = await resolveCorrectCasing(packet.from);
       const ts = packet.timestamp || Date.now();
       
-      if (!activeChatHistory[friendKey]) activeChatHistory[friendKey] = [];
-      activeChatHistory[friendKey].push({ sender: packet.from, text: packet.text, timestamp: ts });
+      if (!activeChatHistory[resolvedFrom]) activeChatHistory[resolvedFrom] = [];
+      activeChatHistory[resolvedFrom].push({ sender: resolvedFrom, text: packet.text, timestamp: ts });
 
-      if (!mutedFriends.has(packet.from.toLowerCase().trim())) {
-        if (!currentActivePrivateFriend || currentActivePrivateFriend.toLowerCase().trim() !== packet.from.toLowerCase().trim() || privateChatPanel.classList.contains('hidden')) {
+      if (!mutedFriends.has(resolvedFrom)) {
+        if (!currentActivePrivateFriend || currentActivePrivateFriend !== resolvedFrom || privateChatPanel.classList.contains('hidden')) {
           showDesktopNotification(
-            `Message from ${packet.from}`,
+            `Message from ${resolvedFrom}`,
             packet.text,
-            `https://crafthead.net/avatar/${encodeURIComponent(packet.from)}/64`
+            `https://crafthead.net/avatar/${encodeURIComponent(resolvedFrom)}/64`
           );
         }
       }
 
-      if (currentActivePrivateFriend && currentActivePrivateFriend.toLowerCase().trim() === packet.from.toLowerCase().trim()) {
-        appendChatMessage('private-chat-messages-container', packet.from, packet.text, ts);
+      if (currentActivePrivateFriend && currentActivePrivateFriend === resolvedFrom) {
+        appendChatMessage('private-chat-messages-container', resolvedFrom, packet.text, ts);
       } else {
-        openDirectChat(packet.from);
+        openDirectChat(resolvedFrom);
       }
     }
   });
@@ -1462,7 +1635,7 @@
       return;
     }
 
-    if (currentFriendsList.has(targetUsername.toLowerCase())) {
+    if (currentFriendsList.has(targetUsername)) {
       showTuxAlert('Notice', `You are already friends with ${targetUsername}.`);
       return;
     }
@@ -1473,7 +1646,6 @@
     });
 
     if (result.success) {
-      // CUSTOM TOAST/MODAL INSTEAD OF NATIVE alert()
       showTuxToast(`Friend request sent to ${targetUsername}!`);
       if (input) input.value = '';
     } else {
@@ -1494,12 +1666,13 @@
       if (card) card.remove();
 
       if (action === 'accept') {
-        showTuxToast(`You are now friends with ${targetUsername}!`);
-        renderFriendInList({ username: targetUsername, status: 'online' });
+        const resolvedTarget = await resolveCorrectCasing(targetUsername);
+        showTuxToast(`You are now friends with ${resolvedTarget}!`);
+        await renderFriendInList({ username: resolvedTarget, status: 'online' });
         
         const currentCached = loadFriendsFromLocalCache();
-        if (!currentCached.some(f => (f.username || f.name).toLowerCase() === targetUsername.toLowerCase())) {
-          currentCached.push({ username: targetUsername, status: 'online', lastSeen: null });
+        if (!currentCached.some(f => (f.username || f.name || f.pristineName).toLowerCase() === resolvedTarget.toLowerCase())) {
+          currentCached.push({ username: resolvedTarget, pristineName: resolvedTarget, status: 'online', lastSeen: null });
           saveFriendsToLocalCache(currentCached);
         }
       }
@@ -1613,6 +1786,29 @@
   let savedAccounts = JSON.parse(localStorage.getItem('tux_accounts') || '[]');
   let activeAccount = JSON.parse(localStorage.getItem('tux_active_account') || 'null');
 
+  async function reloadFriendsViewForAccount() {
+    const friendsContainer = document.getElementById('friends-list-container');
+    if (friendsContainer) {
+      friendsContainer.innerHTML = '<p class="subtext">Loading friends...</p>';
+    }
+    currentFriendsList.clear();
+
+    const cachedFriends = loadFriendsFromLocalCache();
+    if (cachedFriends.length > 0) {
+      if (friendsContainer) friendsContainer.innerHTML = '';
+      for (const f of cachedFriends) {
+        if (!f.lastSeen) {
+          f.lastSeen = getLastSeenFromLocalCache(f.username || f.name || f.pristineName);
+        }
+        await renderFriendInList(f);
+      }
+    } else {
+      if (friendsContainer) {
+        friendsContainer.innerHTML = '<p class="subtext">No friends found for this account.</p>';
+      }
+    }
+  }
+
   function updateAccountUI() {
     const activeName = document.getElementById('active-profile-name');
     const activeUuid = document.getElementById('active-profile-uuid');
@@ -1660,16 +1856,22 @@
 
     if (accountsList) {
       if (savedAccounts.length === 0) {
-        accountsList.innerHTML = '<p class="subtext">No accounts saved yet. Click "Add Account" to sign in with Microsoft.</p>';
+        accountsList.innerHTML = '<p class="subtext">No accounts saved yet. Click "Add Account" to sign in with Microsoft or add an offline account.</p>';
       } else {
         accountsList.innerHTML = savedAccounts.map(acc => {
           const isActive = activeAccount && activeAccount.uuid === acc.uuid;
+          const isOffline = acc.type === 'offline';
+          
           return `
             <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; box-sizing: border-box; width: 100%;">
               <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
                 <img src="https://crafthead.net/avatar/${acc.uuid}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
                 <div class="setting-info" style="min-width: 0;">
-                  <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${acc.name} ${isActive ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #a855f7;">ACTIVE</span>' : ''}</label>
+                  <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${acc.name} 
+                    ${isActive ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #a855f7;">ACTIVE</span>' : ''}
+                    ${isOffline ? '<span class="badge" style="font-size: 9px; padding: 2px 6px; margin-left: 6px; background: #64748B;">OFFLINE</span>' : ''}
+                  </label>
                   <span class="subtext">${acc.uuid.substring(0, 18)}...</span>
                 </div>
               </div>
@@ -1683,6 +1885,7 @@
       }
     }
 
+    reloadFriendsViewForAccount();
     initBackendNetwork();
   }
 
@@ -1750,9 +1953,12 @@
 
     playBtn.disabled = true;
     playBtn.innerText = "AUTHENTICATING...";
-    if (statusText) statusText.innerText = "Status: Validating session token...";
+    if (statusText) statusText.innerText = "Status: Preparing session...";
 
-    if (activeAccount.refreshToken) {
+    if (activeAccount.type === 'offline') {
+      console.log("[Auth] Launching with offline account profile:", activeAccount.name);
+      userAuthToken = activeAccount.mclcAuth;
+    } else if (activeAccount.refreshToken) {
       const lastRefreshed = activeAccount.lastRefreshed || 0;
       const hoursSinceRefresh = (Date.now() - lastRefreshed) / (1000 * 60 * 60);
 
@@ -1824,17 +2030,6 @@
     initializeVersions();
     updateAccountUI();
     setupSkinControls();
-
-    const cachedFriends = loadFriendsFromLocalCache();
-    if (cachedFriends.length > 0) {
-      console.log("[UI] Loading cached friends list into UI prior to network sync...");
-      cachedFriends.forEach(f => {
-        if (!f.lastSeen) {
-          f.lastSeen = getLastSeenFromLocalCache(f.username || f.name);
-        }
-        renderFriendInList(f);
-      });
-    }
 
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
