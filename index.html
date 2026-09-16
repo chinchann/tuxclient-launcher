@@ -367,8 +367,31 @@
           <button id="mod-search-btn" onclick="searchModrinth()">Search</button>
         </div>
 
+        <div class="mods-section" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; color: #fff;">Folders</h3>
+            <button class="secondary-btn" style="padding: 6px 12px; font-size: 12px;" onclick="openCreateFolderModal('mods')">New Folder</button>
+          </div>
+          <div id="installed-folders-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+
+        <div id="subfolder-view-container-mods" class="hidden" style="margin-bottom: 24px; background: rgba(20,20,31,0.95); border: 1px solid #A855F7; border-radius: 12px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button class="secondary-btn" style="padding: 4px 10px; font-size: 12px;" onclick="closeSubfolderView()">← Back</button>
+              <h3 id="subfolder-title-mods" style="margin: 0; font-size: 15px; color: #fff;">Folder Name</h3>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="download-btn" style="padding: 6px 14px; font-size: 12px;" onclick="addFileToActiveFolder()">Add Item from Installed List</button>
+            </div>
+          </div>
+          <div id="subfolder-items-grid-mods" class="mod-grid"></div>
+        </div>
+
         <div class="mods-section">
-          <h3>Installed Mods</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0;">Installed Mods</h3>
+          </div>
           <div id="installed-mods-list" class="mod-grid"></div>
         </div>
 
@@ -389,8 +412,31 @@
           <button id="pack-search-btn" onclick="searchPacksModrinth()">Search</button>
         </div>
 
+        <div class="mods-section" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; color: #fff;">Folders</h3>
+            <button class="secondary-btn" style="padding: 6px 12px; font-size: 12px;" onclick="openCreateFolderModal('resourcepacks')">New Folder</button>
+          </div>
+          <div id="installed-pack-folders-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+
+        <div id="subfolder-view-container-resourcepacks" class="hidden" style="margin-bottom: 24px; background: rgba(20,20,31,0.95); border: 1px solid #A855F7; border-radius: 12px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button class="secondary-btn" style="padding: 4px 10px; font-size: 12px;" onclick="closeSubfolderView()">← Back</button>
+              <h3 id="subfolder-title-resourcepacks" style="margin: 0; font-size: 15px; color: #fff;">Folder Name</h3>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="download-btn" style="padding: 6px 14px; font-size: 12px;" onclick="addFileToActiveFolder()">Add Item from Installed List</button>
+            </div>
+          </div>
+          <div id="subfolder-items-grid-resourcepacks" class="mod-grid"></div>
+        </div>
+
         <div class="mods-section">
-          <h3>Installed Resource Packs</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0;">Installed Resource Packs</h3>
+          </div>
           <div id="installed-packs-list" class="mod-grid"></div>
         </div>
 
@@ -411,8 +457,31 @@
           <button id="shader-search-btn" onclick="searchShadersModrinth()">Search</button>
         </div>
 
+        <div class="mods-section" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 16px; color: #fff;">Folders</h3>
+            <button class="secondary-btn" style="padding: 6px 12px; font-size: 12px;" onclick="openCreateFolderModal('shaders')">New Folder</button>
+          </div>
+          <div id="installed-shader-folders-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+
+        <div id="subfolder-view-container-shaders" class="hidden" style="margin-bottom: 24px; background: rgba(20,20,31,0.95); border: 1px solid #A855F7; border-radius: 12px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button class="secondary-btn" style="padding: 4px 10px; font-size: 12px;" onclick="closeSubfolderView()">← Back</button>
+              <h3 id="subfolder-title-shaders" style="margin: 0; font-size: 15px; color: #fff;">Folder Name</h3>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="download-btn" style="padding: 6px 14px; font-size: 12px;" onclick="addFileToActiveFolder()">Add Item from Installed List</button>
+            </div>
+          </div>
+          <div id="subfolder-items-grid-shaders" class="mod-grid"></div>
+        </div>
+
         <div class="mods-section">
-          <h3>Installed Shader Packs</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0;">Installed Shader Packs</h3>
+          </div>
           <div id="installed-shaders-list" class="mod-grid"></div>
         </div>
 
@@ -521,7 +590,22 @@
     </div>
   </div>
 
-  <!-- OFFLINE ACCOUNT MODAL -->
+  <div id="create-folder-modal" class="tux-modal-overlay">
+    <div class="tux-modal-card">
+      <h3 class="tux-modal-title">Create Folder</h3>
+      <p class="tux-modal-desc">Enter a name for your new folder:</p>
+      
+      <div style="margin-bottom: 20px;">
+        <input type="text" id="modal-folder-name-input" placeholder="Folder name..." style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px; box-sizing: border-box;">
+      </div>
+
+      <div class="tux-modal-buttons">
+        <button id="folder-modal-cancel" class="tux-btn-secondary">Cancel</button>
+        <button id="folder-modal-submit" class="tux-btn-primary">Create</button>
+      </div>
+    </div>
+  </div>
+
   <div id="offline-account-modal" class="tux-modal-overlay">
     <div class="tux-modal-card">
       <h3 class="tux-modal-title">Add Offline Account</h3>
@@ -538,7 +622,6 @@
     </div>
   </div>
 
-  <!-- CUSTOM UI MODAL CONTAINER -->
   <div id="tux-custom-modal" class="tux-modal-overlay">
     <div class="tux-modal-card">
       <h3 id="tux-modal-title" class="tux-modal-title">Notice</h3>
@@ -549,7 +632,6 @@
     </div>
   </div>
 
-  <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="tux-toast-container"></div>
 
   <div id="update-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
@@ -675,6 +757,324 @@
       toast.remove();
     }, 4000);
   }
+
+  // --- CREATE FOLDER MODAL LOGIC ---
+  const createFolderModal = document.getElementById('create-folder-modal');
+  const modalFolderInput = document.getElementById('modal-folder-name-input');
+  const folderModalCancel = document.getElementById('folder-modal-cancel');
+  const folderModalSubmit = document.getElementById('folder-modal-submit');
+  let activeFolderContentType = 'mods';
+
+  window.openCreateFolderModal = (contentType) => {
+    activeFolderContentType = contentType;
+    if (modalFolderInput) modalFolderInput.value = '';
+    createFolderModal?.classList.add('active');
+    setTimeout(() => modalFolderInput?.focus(), 50);
+  };
+
+  folderModalCancel?.addEventListener('click', () => {
+    createFolderModal?.classList.remove('active');
+  });
+
+  folderModalSubmit?.addEventListener('click', async () => {
+    const folderName = modalFolderInput ? modalFolderInput.value.trim() : '';
+    if (!folderName) {
+      showTuxAlert('Error', 'Please enter a folder name.');
+      return;
+    }
+
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    const res = await ipcRenderer.invoke('create-content-folder', {
+      version,
+      loader,
+      type: activeFolderContentType,
+      folderName
+    });
+
+    createFolderModal?.classList.remove('active');
+
+    if (res.success) {
+      showTuxToast(`Created folder: ${folderName}`);
+      loadInstalledFolders(activeFolderContentType);
+    } else {
+      showTuxAlert('Error', res.message);
+    }
+  });
+
+  modalFolderInput?.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') folderModalSubmit.click();
+  });
+
+  // --- SUBFOLDER NAVIGATION & MANAGEMENT ---
+  let activeSubfolderContext = null;
+
+  async function loadInstalledFolders(contentType = 'mods') {
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    
+    let gridId = 'installed-folders-list';
+    if (contentType === 'resourcepacks') gridId = 'installed-pack-folders-list';
+    if (contentType === 'shaders') gridId = 'installed-shader-folders-list';
+
+    const foldersGrid = document.getElementById(gridId);
+    if (!foldersGrid) return;
+
+    foldersGrid.innerHTML = '';
+    const folders = await ipcRenderer.invoke('get-installed-folders', { version, loader, type: contentType });
+
+    if (!folders || folders.length === 0) {
+      foldersGrid.innerHTML = '<p class="subtext">No custom folders created yet.</p>';
+      return;
+    }
+
+    foldersGrid.style.display = 'flex';
+    foldersGrid.style.flexWrap = 'wrap';
+    foldersGrid.style.gap = '8px';
+
+    folders.forEach(folder => {
+      const isFolderDisabled = folder.fileName.endsWith('.disabled');
+      const folderDisplayName = folder.name.replace('.disabled', '');
+      
+      const chip = document.createElement('div');
+      chip.style.cssText = `background: ${isFolderDisabled ? 'rgba(100,116,139,0.1)' : 'rgba(168,85,247,0.1)'}; border: 1px solid ${isFolderDisabled ? '#64748B' : '#A855F7'}; border-radius: 20px; padding: 6px 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background 0.2s;`;
+      chip.innerHTML = `
+        <span style="font-size: 14px;">📁</span>
+        <span style="color: #fff; font-size: 13px; font-weight: 500;">${folderDisplayName}</span>
+        <label class="switch" style="transform: scale(0.7); margin-left: 2px;" onclick="event.stopPropagation()" title="Enable/Disable Folder">
+          <input type="checkbox" ${!isFolderDisabled ? 'checked' : ''} onchange="toggleFolderStateMain('${folder.fileName.replace(/'/g, "\\'")}', this.checked)">
+          <span class="slider"></span>
+        </label>
+        <button style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 12px; padding: 0; margin-left: 2px;" onclick="event.stopPropagation(); deleteFolderItem('${folder.fileName.replace(/'/g, "\\'")}')" title="Delete Folder">✕</button>
+      `;
+      chip.onclick = () => openSubfolder(contentType, folder.fileName);
+      foldersGrid.appendChild(chip);
+    });
+  }
+
+  window.openSubfolder = async (contentType, folderName) => {
+    activeFolderContentType = contentType;
+    activeSubfolderContext = { type: contentType, folderName };
+    
+    // Hide all subfolder containers first
+    document.getElementById('subfolder-view-container-mods')?.classList.add('hidden');
+    document.getElementById('subfolder-view-container-resourcepacks')?.classList.add('hidden');
+    document.getElementById('subfolder-view-container-shaders')?.classList.add('hidden');
+
+    // Show only the correct tab's subfolder container
+    const activeSubContainer = document.getElementById(`subfolder-view-container-${contentType}`);
+    if (activeSubContainer) activeSubContainer.classList.remove('hidden');
+    
+    const titleEl = document.getElementById(`subfolder-title-${contentType}`);
+    if (titleEl) titleEl.innerText = `📁 ${folderName.replace('.disabled', '')}`;
+
+    await refreshSubfolderView();
+  };
+
+  async function refreshSubfolderView() {
+    if (!activeSubfolderContext) return;
+    const { type, folderName } = activeSubfolderContext;
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    const grid = document.getElementById(`subfolder-items-grid-${type}`);
+    if (!grid) return;
+
+    const scrollContainer = grid.closest('div[style*="overflow"]') || grid.parentElement;
+    const currentScroll = scrollContainer ? scrollContainer.scrollTop : 0;
+
+    const items = await ipcRenderer.invoke('get-folder-contents', { version, loader, type, folderName });
+
+    if (!items || items.length === 0) {
+      grid.innerHTML = '<p class="subtext">This folder is empty. Click "Add Item from Installed List" above.</p>';
+      if (scrollContainer) scrollContainer.scrollTop = currentScroll;
+      return;
+    }
+
+    grid.innerHTML = items.map(item => `
+      <div class="mod-card">
+        <div class="mod-info">
+          <strong title="${item.fileName}">${item.name}</strong>
+        </div>
+        <div class="mod-actions" style="display: flex; gap: 6px; align-items: center;">
+          <button class="secondary-btn" style="padding: 4px 8px; font-size: 11px;" onclick="moveItemOut('${item.relativePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Move item back out of folder">Out</button>
+          <label class="switch" title="Enable / Disable Item">
+            <input type="checkbox" ${item.enabled ? 'checked' : ''} onchange="toggleSubfolderItem('${item.relativePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)">
+            <span class="slider"></span>
+          </label>
+          <button class="delete-icon-btn" onclick="deleteFolderItem('${item.relativePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Delete">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+
+    if (scrollContainer) {
+      requestAnimationFrame(() => {
+        scrollContainer.scrollTop = currentScroll;
+      });
+    }
+  }
+
+  window.closeSubfolderView = () => {
+    if (activeSubfolderContext) {
+      const type = activeSubfolderContext.type;
+      const subContainer = document.getElementById(`subfolder-view-container-${type}`);
+      if (subContainer) subContainer.classList.add('hidden');
+    }
+    activeSubfolderContext = null;
+    
+    const activeTab = document.querySelector('.nav-btn.active')?.id;
+    if (activeTab === 'tab-mods-btn') loadInstalledFolders('mods');
+    else if (activeTab === 'tab-packs-btn') loadInstalledFolders('resourcepacks');
+    else if (activeTab === 'tab-shaders-btn') loadInstalledFolders('shaders');
+  };
+
+  window.toggleFolderStateMain = async (folderFileName, enable) => {
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    const contentType = activeFolderContentType;
+
+    const res = await ipcRenderer.invoke('toggle-folder-state', { version, loader, type: contentType, folderName: folderFileName, enable });
+    if (res && res.success && activeSubfolderContext && activeSubfolderContext.folderName === folderFileName) {
+      activeSubfolderContext.folderName = res.newFolderName;
+    }
+    loadInstalledFolders(contentType);
+  };
+
+  window.toggleSubfolderItem = async (relativePath, enable) => {
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    const type = activeSubfolderContext ? activeSubfolderContext.type : 'mods';
+
+    await ipcRenderer.invoke('toggle-subfolder-item', { version, loader, type, relativePath, enable });
+    refreshSubfolderView();
+  };
+
+  window.moveItemOut = async (relativePath) => {
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    const { type, folderName } = activeSubfolderContext;
+
+    const res = await ipcRenderer.invoke('move-item-out-of-subfolder', { version, loader, type, folderName, relativePath });
+    if (res && res.success) {
+      refreshSubfolderView();
+      if (type === 'mods') loadInstalledMods();
+      else loadInstalledPacks(type);
+    } else {
+      showTuxAlert('Error', res?.message || 'Failed to move item out.');
+    }
+  };
+
+  window.addFileToActiveFolder = async () => {
+    if (!activeSubfolderContext) return;
+    const { type, folderName } = activeSubfolderContext;
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    let installedItems = [];
+    if (type === 'mods') {
+      installedItems = await ipcRenderer.invoke('get-installed-mods', { version, loader });
+    } else {
+      installedItems = await ipcRenderer.invoke('get-installed-packs', { version, loader, type });
+    }
+
+    if (!installedItems || installedItems.length === 0) {
+      showTuxAlert('Notice', 'No installed items available to add.');
+      return;
+    }
+
+    let selectModal = document.getElementById('internal-picker-modal');
+    if (!selectModal) {
+      selectModal = document.createElement('div');
+      selectModal.id = 'internal-picker-modal';
+      selectModal.className = 'tux-modal-overlay active';
+      selectModal.innerHTML = `
+        <div class="tux-modal-card" style="width: 420px; text-align: left;">
+          <h3 class="tux-modal-title" style="margin-bottom: 4px;">Select Item to Add</h3>
+          <p class="tux-modal-desc" style="margin-bottom: 12px;">Click items to move them into this folder:</p>
+          <div id="picker-items-list" style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;"></div>
+          <div class="tux-modal-buttons">
+            <button class="tux-btn-primary" style="width: 100%;" onclick="document.getElementById('internal-picker-modal').remove()">Close</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(selectModal);
+    } else {
+      selectModal.classList.add('active');
+    }
+
+    await refreshPickerList(installedItems);
+  };
+
+  async function refreshPickerList(installedItems) {
+    const listContainer = document.getElementById('picker-items-list');
+    if (!listContainer) return;
+
+    if (!installedItems || installedItems.length === 0) {
+      listContainer.innerHTML = '<p class="subtext" style="text-align:center; padding: 20px;">All installed items are already in folders.</p>';
+      return;
+    }
+
+    listContainer.innerHTML = installedItems.map(item => `
+      <div style="background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;" id="picker-row-${CSS.escape(item.fileName)}">
+        <span style="font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 270px;" title="${item.fileName}">${item.name || item.fileName}</span>
+        <button class="download-btn" style="padding: 4px 10px; font-size: 11px;" onclick="moveItemIntoFolderAndRefresh('${item.fileName.replace(/'/g, "\\'")}')">Add</button>
+      </div>
+    `).join('');
+  }
+
+  window.moveItemIntoFolderAndRefresh = async (fileName) => {
+    if (!activeSubfolderContext) return;
+    const { type, folderName } = activeSubfolderContext;
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+
+    const res = await ipcRenderer.invoke('move-item-to-subfolder', { version, loader, type, folderName, fileName });
+
+    if (res && res.success) {
+      refreshSubfolderView();
+      if (type === 'mods') loadInstalledMods();
+      else loadInstalledPacks(type);
+
+      let updatedItems = [];
+      if (type === 'mods') {
+        updatedItems = await ipcRenderer.invoke('get-installed-mods', { version, loader });
+      } else {
+        updatedItems = await ipcRenderer.invoke('get-installed-packs', { version, loader, type });
+      }
+      refreshPickerList(updatedItems);
+    } else {
+      showTuxAlert('Error', res?.message || 'Failed to move item.');
+    }
+  };
+
+  window.deleteFolderItem = async (targetPath) => {
+    const version = document.getElementById('version-select')?.value || '1.21.1';
+    const loader = document.getElementById('loader-select')?.value || 'fabric';
+    
+    // Dynamically fetch the correct type based on active tab or subfolder context
+    let type = activeFolderContentType;
+    if (activeSubfolderContext && activeSubfolderContext.type) {
+      type = activeSubfolderContext.type;
+    } else {
+      const activeTab = document.querySelector('.nav-btn.active')?.id;
+      if (activeTab === 'tab-packs-btn') type = 'resourcepacks';
+      else if (activeTab === 'tab-shaders-btn') type = 'shaders';
+      else if (activeTab === 'tab-mods-btn') type = 'mods';
+    }
+
+    const res = await ipcRenderer.invoke('delete-folder-item', { version, loader, type, relativePath: targetPath });
+    
+    if (res && res.success) {
+      showTuxToast('Item deleted successfully');
+    }
+
+    if (activeSubfolderContext) {
+      refreshSubfolderView();
+    } else {
+      loadInstalledFolders(type);
+    }
+  };
 
   // --- OFFLINE ACCOUNT HANDLING ---
   const offlineModal = document.getElementById('offline-account-modal');
@@ -922,14 +1322,17 @@
       if (tab.view) tab.view.classList.remove('hidden');
 
       if (tab.btn.id === 'tab-mods-btn') {
+        loadInstalledFolders('mods');
         loadInstalledMods();
         searchModrinth();
       }
       if (tab.btn.id === 'tab-packs-btn') {
+        loadInstalledFolders('resourcepacks');
         loadInstalledPacks('resourcepacks');
         searchPacksModrinth();
       }
       if (tab.btn.id === 'tab-shaders-btn') {
+        loadInstalledFolders('shaders');
         loadInstalledPacks('shaders');
         searchShadersModrinth();
       }
@@ -949,12 +1352,15 @@
     if (!activeTabBtn) return;
 
     if (activeTabBtn.id === 'tab-mods-btn') {
+      loadInstalledFolders('mods');
       loadInstalledMods();
       searchModrinth();
     } else if (activeTabBtn.id === 'tab-packs-btn') {
+      loadInstalledFolders('resourcepacks');
       loadInstalledPacks('resourcepacks');
       searchPacksModrinth();
     } else if (activeTabBtn.id === 'tab-shaders-btn') {
+      loadInstalledFolders('shaders');
       loadInstalledPacks('shaders');
       searchShadersModrinth();
     }
@@ -2030,6 +2436,7 @@
     initializeVersions();
     updateAccountUI();
     setupSkinControls();
+    loadInstalledFolders('mods');
 
     if ('Notification' in window && Notification.permission !== 'granted') {
       Notification.requestPermission();
@@ -2237,32 +2644,20 @@
         return;
       }
 
-      if (container.children.length !== mods.length || container.querySelector('.subtext')) {
-        container.innerHTML = mods.map(m => `
-          <div class="mod-card" data-filename="${m.fileName}">
-            <div class="mod-info">
-              <strong title="${m.name}">${m.name}</strong>
-            </div>
-            <div class="mod-actions">
-              <label class="switch" title="Enable / Disable Mod">
-                <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName}', this.checked)">
-                <span class="slider"></span>
-              </label>
-              <button class="delete-icon-btn" onclick="deleteMod('${m.fileName}')" title="Delete Mod">🗑️</button>
-            </div>
+      container.innerHTML = mods.map(m => `
+        <div class="mod-card" data-filename="${m.fileName}">
+          <div class="mod-info">
+            <strong title="${m.fileName}">${m.name}</strong>
           </div>
-        `).join('');
-      } else {
-        mods.forEach(m => {
-          const card = container.querySelector(`[data-filename="${CSS.escape(m.fileName)}"]`);
-          if (card) {
-            const checkbox = card.querySelector('input[type="checkbox"]');
-            if (checkbox && checkbox.checked !== m.enabled) {
-              checkbox.checked = m.enabled;
-            }
-          }
-        });
-      }
+          <div class="mod-actions">
+            <label class="switch" title="Enable / Disable Mod">
+              <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange="toggleMod('${m.fileName.replace(/'/g, "\\'")}', this.checked)">
+              <span class="slider"></span>
+            </label>
+            <button class="delete-icon-btn" onclick="deleteMod('${m.fileName.replace(/'/g, "\\'")}')" title="Delete Mod">🗑️</button>
+          </div>
+        </div>
+      `).join('');
     } catch {
       container.innerHTML = '<p class="subtext">Error loading mods folder.</p>';
     }
@@ -2372,7 +2767,7 @@
       container.innerHTML = packs.map(p => `
         <div class="mod-card">
           <div class="mod-info"><strong>${p.name}</strong></div>
-          <button class="delete-icon-btn" onclick="deletePack('${p.fileName}', '${typeFolder}')" title="Delete">🗑️</button>
+          <button class="delete-icon-btn" onclick="deletePack('${p.fileName.replace(/'/g, "\\'")}', '${typeFolder}')" title="Delete">🗑️</button>
         </div>
       `).join('');
     } catch {

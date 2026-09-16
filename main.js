@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 const path = require('path');
@@ -884,12 +884,35 @@ ipcMain.handle('get-installed-mods', async (event, { version = '1.21.1', loader 
   if (!fs.existsSync(modsDir)) return [];
 
   return fs.readdirSync(modsDir)
-    .filter(f => f.endsWith('.jar') || f.endsWith('.jar.disabled'))
+    .filter(f => {
+      const fullPath = path.join(modsDir, f);
+      return fs.statSync(fullPath).isFile() && (f.endsWith('.jar') || f.endsWith('.jar.disabled'));
+    })
     .map(f => ({
-      fileName: f, 
-      name: f.replace('.disabled', '').replace('.jar', ''), 
+      fileName: f,
+      name: f.replace('.disabled', ''),
       enabled: !f.endsWith('.disabled'),
-      isBundled: false
+      isFolder: false
+    }));
+});
+
+ipcMain.handle('get-installed-folders', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods' } = {}) => {
+  const paths = getInstancePath(version, loader);
+  let targetDir = paths.modsDir;
+  if (type === 'resourcepacks') targetDir = paths.resourcePacksDir;
+  if (type === 'shaders') targetDir = paths.shaderPacksDir;
+
+  if (!fs.existsSync(targetDir)) return [];
+
+  return fs.readdirSync(targetDir)
+    .filter(f => {
+      const fullPath = path.join(targetDir, f);
+      return fs.statSync(fullPath).isDirectory();
+    })
+    .map(f => ({
+      fileName: f,
+      name: f,
+      isFolder: true
     }));
 });
 
@@ -897,15 +920,25 @@ ipcMain.handle('toggle-mod', async (event, { version = '1.21.1', loader = 'fabri
   const { modsDir } = getInstancePath(version, loader);
   const cur = path.join(modsDir, fileName);
   if (!fs.existsSync(cur)) return { success: false };
-  const target = enable ? fileName.replace('.disabled', '') : fileName + '.disabled';
-  fs.renameSync(cur, path.join(modsDir, target));
+
+  // Block folders from being toggled with disabled extension
+  if (fs.statSync(cur).isDirectory()) {
+    return { success: false, message: 'Cannot toggle directories.' };
+  }
+
+  const cleanName = fileName.replace(/(\.disabled)+$/, '');
+  const targetName = enable ? cleanName : cleanName + '.disabled';
+  
+  fs.renameSync(cur, path.join(modsDir, targetName));
   return { success: true };
 });
 
 ipcMain.handle('delete-mod', async (event, { version = '1.21.1', loader = 'fabric', fileName }) => {
   const { modsDir } = getInstancePath(version, loader);
   const p = path.join(modsDir, fileName);
-  if (fs.existsSync(p)) fs.unlinkSync(p);
+  if (fs.existsSync(p)) {
+    fs.rmSync(p, { recursive: true, force: true });
+  }
   return { success: true };
 });
 
@@ -913,7 +946,17 @@ ipcMain.handle('get-installed-packs', async (event, { version = '1.21.1', loader
   const paths = getInstancePath(version, loader);
   const targetDir = type === 'shaders' ? paths.shaderPacksDir : paths.resourcePacksDir;
   if (!fs.existsSync(targetDir)) return [];
-  return fs.readdirSync(targetDir).map(f => ({ fileName: f, name: f.replace('.zip', '') }));
+  
+  return fs.readdirSync(targetDir)
+    .filter(f => {
+      const fullPath = path.join(targetDir, f);
+      return fs.statSync(fullPath).isFile() && f.endsWith('.zip');
+    })
+    .map(f => ({
+      fileName: f,
+      name: f.replace('.zip', ''),
+      isFolder: false
+    }));
 });
 
 ipcMain.handle('delete-pack', async (event, { version = '1.21.1', loader = 'fabric', type = 'resourcepacks', fileName }) => {
@@ -921,6 +964,147 @@ ipcMain.handle('delete-pack', async (event, { version = '1.21.1', loader = 'fabr
   const targetDir = type === 'shaders' ? paths.shaderPacksDir : paths.resourcePacksDir;
   const p = path.join(targetDir, fileName);
   if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+  return { success: true };
+});
+
+// --- SUBFOLDER NAVIGATION & MANAGEMENT HANDLERS ---
+ipcMain.handle('create-content-folder', async (event, { version, loader, type, folderName }) => {
+  try {
+    const paths = getInstancePath(version, loader);
+    let targetDir = paths.modsDir;
+    if (type === 'resourcepacks') targetDir = paths.resourcePacksDir;
+    if (type === 'shaders') targetDir = paths.shaderPacksDir;
+
+    const newFolderPath = path.join(targetDir, folderName);
+
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    if (fs.existsSync(newFolderPath)) {
+      return { success: false, message: 'A folder with this name already exists.' };
+    }
+
+    fs.mkdirSync(newFolderPath, { recursive: true });
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+ipcMain.handle('get-folder-contents', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName } = {}) => {
+  const paths = getInstancePath(version, loader);
+  let baseDir = paths.modsDir;
+  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
+  if (type === 'shaders') baseDir = paths.shaderPacksDir;
+
+  const targetDir = path.join(baseDir, folderName);
+  if (!fs.existsSync(targetDir)) return [];
+
+  return fs.readdirSync(targetDir).map(f => {
+    const fullPath = path.join(targetDir, f);
+    const isDir = fs.statSync(fullPath).isDirectory();
+    return {
+      fileName: f,
+      name: f,
+      enabled: isDir ? true : !f.endsWith('.disabled'),
+      isFolder: isDir,
+      relativePath: path.join(folderName, f)
+    };
+  });
+});
+
+ipcMain.handle('move-item-to-subfolder', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName, fileName }) => {
+  const paths = getInstancePath(version, loader);
+  let baseDir = paths.modsDir;
+  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
+  if (type === 'shaders') baseDir = paths.shaderPacksDir;
+
+  const srcPath = path.join(baseDir, fileName);
+  const destPath = path.join(baseDir, folderName, fileName);
+
+  if (!fs.existsSync(srcPath)) {
+    return { success: false, message: 'Source file not found.' };
+  }
+
+  try {
+    fs.renameSync(srcPath, destPath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+ipcMain.handle('move-item-out-of-subfolder', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName, relativePath }) => {
+  try {
+    const paths = getInstancePath(version, loader);
+    let baseDir = paths.modsDir;
+    if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
+    if (type === 'shaders') baseDir = paths.shaderPacksDir;
+
+    // Fully resolve paths and handle subfolder separation safely
+    const cleanRelativePath = relativePath.startsWith(folderName + path.sep) 
+      ? relativePath.substring(folderName.length + path.sep.length) 
+      : relativePath;
+
+    const sourcePath = path.join(baseDir, folderName, cleanRelativePath);
+    const fileName = path.basename(cleanRelativePath);
+    const destPath = path.join(baseDir, fileName);
+
+    if (fs.existsSync(sourcePath)) {
+      if (fs.existsSync(destPath)) {
+        fs.unlinkSync(destPath);
+      }
+      fs.renameSync(sourcePath, destPath);
+      return { success: true };
+    }
+    return { success: false, message: 'Source file not found.' };
+  } catch (err) {
+    console.error("Error moving item out of subfolder:", err);
+    return { success: false, message: err.message };
+  }
+});
+
+ipcMain.handle('add-file-to-folder', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName }) => {
+  const paths = getInstancePath(version, loader);
+  let baseDir = paths.modsDir;
+  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
+  if (type === 'shaders') baseDir = paths.shaderPacksDir;
+
+  const targetDir = path.join(baseDir, folderName);
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Minecraft Content', extensions: ['jar', 'zip'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePaths.length) {
+    return { success: false, message: 'Cancelled' };
+  }
+
+  for (const filePath of result.filePaths) {
+    const fileName = path.basename(filePath);
+    const destPath = path.join(targetDir, fileName);
+    fs.copyFileSync(filePath, destPath);
+  }
+
+  return { success: true };
+});
+
+ipcMain.handle('delete-folder-item', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', relativePath }) => {
+  const paths = getInstancePath(version, loader);
+  let baseDir = paths.modsDir;
+  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
+  if (type === 'shaders') baseDir = paths.shaderPacksDir;
+
+  const targetPath = path.join(baseDir, relativePath);
+  if (fs.existsSync(targetPath)) {
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
   return { success: true };
 });
 
