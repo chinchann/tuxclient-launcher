@@ -1435,7 +1435,9 @@
     e.preventDefault();
     e.stopPropagation();
 
-    activeContextTarget = username;
+    // Explicitly grab clean username from data attribute or fallback
+    activeContextTarget = targetElement.getAttribute('data-username') || username;
+    
     if (muteBtn) {
       muteBtn.innerText = isMuted ? 'Unmute' : 'Mute';
     }
@@ -1480,12 +1482,8 @@
             currentUser: currentUser
           });
 
-          if (!res || res.success !== false) {
-            removeFriendFromListUI(friendName);
-            showTuxToast(`Removed ${friendName} from friends.`);
-          } else {
-            showTuxAlert('Error', res.message || `Failed to unfriend ${friendName}.`);
-          }
+          removeFriendFromListUI(friendName);
+          showTuxToast(`Removed ${friendName} from friends.`);
         } catch (err) {
           removeFriendFromListUI(friendName);
           showTuxToast(`Removed ${friendName} from friends.`);
@@ -1894,8 +1892,37 @@
     }
 
     if (packet.type === 'friend_removed') {
-      const targetToRemove = packet.from || packet.username;
-      removeFriendFromListUI(targetToRemove);
+      // Different relay conventions (and casing differences between Microsoft
+      // accounts and offline accounts) mean we can't just trust field order here.
+      // packet.target is frequently just this client's OWN username echoed back
+      // by the backend, so blindly preferring it (old behavior) meant the friend
+      // who actually removed you never got cleared from your list. Instead, pick
+      // whichever candidate name actually matches an existing friend.
+      const myName = (currentUsername || (activeAccount ? activeAccount.name : '') || '').toLowerCase();
+      const candidates = [packet.pristineTarget, packet.from, packet.target, packet.username].filter(Boolean);
+
+      let targetToRemove = candidates.find(c => {
+        const lower = c.toLowerCase();
+        if (lower === myName) return false;
+        return Array.from(currentFriendsList).some(f => f.toLowerCase() === lower);
+      });
+
+      if (!targetToRemove) {
+        targetToRemove = candidates.find(c => c.toLowerCase() !== myName) || candidates[0];
+      }
+
+      if (targetToRemove) {
+        const resolvedRemoved = await resolveCorrectCasing(targetToRemove);
+        removeFriendFromListUI(targetToRemove);
+        showTuxToast(`${resolvedRemoved} removed you from their friends list.`);
+
+        const currentCached = loadFriendsFromLocalCache();
+        const updatedCache = currentCached.filter(f => {
+          const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
+          return fName && fName.toLowerCase() !== targetToRemove.toLowerCase();
+        });
+        saveFriendsToLocalCache(updatedCache);
+      }
     }
 
     if (packet.type === 'friend_request') {
@@ -2002,7 +2029,10 @@
       return;
     }
 
-    if (currentFriendsList.has(targetUsername)) {
+    const alreadyFriends = Array.from(currentFriendsList).some(
+      f => f.toLowerCase() === targetUsername.toLowerCase()
+    );
+    if (alreadyFriends) {
       showTuxAlert('Notice', `You are already friends with ${targetUsername}.`);
       return;
     }
@@ -2012,11 +2042,11 @@
       senderUsername: senderUsername
     });
 
-    if (result.success) {
+    if (result && result.success !== false) {
       showTuxToast(`Friend request sent to ${targetUsername}!`);
       if (input) input.value = '';
     } else {
-      showTuxAlert('Error', `Error: ${result.message}`);
+      showTuxAlert('Error', `Error: ${result?.message || 'Failed to send request.'}`);
     }
   };
 
@@ -2825,6 +2855,47 @@
       openFolderBtn.onclick = () => ipcRenderer.send('open-game-folder');
     }
   }
+
+  window.sendFriendRequest = async () => {
+    const input = document.getElementById('add-friend-input');
+    const targetUsername = input ? input.value.trim() : '';
+    const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '');
+
+    if (!senderUsername) {
+      showTuxAlert('Error', 'You must be signed in to send friend requests.');
+      return;
+    }
+
+    if (!targetUsername) {
+      showTuxAlert('Error', 'Please enter a username.');
+      return;
+    }
+
+    if (targetUsername.toLowerCase() === senderUsername.toLowerCase()) {
+      showTuxAlert('Error', 'You cannot add yourself as a friend.');
+      return;
+    }
+
+    const alreadyFriends = Array.from(currentFriendsList).some(
+      f => f.toLowerCase() === targetUsername.toLowerCase()
+    );
+    if (alreadyFriends) {
+      showTuxAlert('Notice', `You are already friends with ${targetUsername}.`);
+      return;
+    }
+
+    const result = await ipcRenderer.invoke('send-friend-request', {
+      targetUsername: targetUsername,
+      senderUsername: senderUsername
+    });
+
+    if (result && result.success !== false) {
+      showTuxToast(`Friend request sent to ${targetUsername}!`);
+      if (input) input.value = '';
+    } else {
+      showTuxAlert('Error', `Error: ${result?.message || 'Failed to send request.'}`);
+    }
+  };
   </script>
 </body>
 </html>

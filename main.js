@@ -391,6 +391,7 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
       e.preventDefault();
+      isExplicitlyLoggingOut = true; // Prevents background reconnection loop during exit
 
       try {
         globalChatSocket.send(JSON.stringify({
@@ -438,23 +439,38 @@ ipcMain.on('window-maximize', (event) => {
 });
 ipcMain.on('window-close', (event) => BrowserWindow.fromWebContents(event.sender)?.close());
 
-// --- LAUNCHER WEBSOCKET & RENDER KEEP-ALIVE ---
+// --- LAUNCHER WEBSOCKET & RENDER KEEP-ALIVE (WITH AUTO-RECONNECT & WATCHDOG) ---
 let globalChatSocket = null;
 let pingInterval = null;
+let pongTimeout = null;
+let reconnectAttempts = 0;
+let isExplicitlyLoggingOut = false;
 
 function connectGlobalChat(username) {
+  if (!username) return;
   const normalizedUsername = username.toLowerCase().trim();
   currentActiveUsername = username.trim();
+  isExplicitlyLoggingOut = false;
 
   if (globalChatSocket) {
     try { globalChatSocket.close(); } catch {}
   }
   if (pingInterval) clearInterval(pingInterval);
+  if (pongTimeout) clearTimeout(pongTimeout);
 
   const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(normalizedUsername)}`;
+  console.log(`[TuxSocket] Connecting to backend: ${connectionUrl}`);
+  
   globalChatSocket = new WebSocket(connectionUrl);
 
   globalChatSocket.on('open', () => {
+    console.log('[TuxSocket] Connected successfully!');
+    reconnectAttempts = 0; // Reset backoff counter on successful handshake
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('network-status', { connected: true });
+    }
+
     const authPacket = {
       type: 'auth',
       username: username.trim(),
@@ -471,9 +487,19 @@ function connectGlobalChat(username) {
     globalChatSocket.send(JSON.stringify(initialPresence));
     globalChatSocket.send(JSON.stringify({ ...initialPresence, type: 'user_status_change' }));
 
+    // Heartbeat: Ping every 30 seconds
     pingInterval = setInterval(() => {
       if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
         globalChatSocket.send(JSON.stringify({ type: 'ping' }));
+
+        // Watchdog: Force reconnect if pong is not received within 15 seconds
+        if (pongTimeout) clearTimeout(pongTimeout);
+        pongTimeout = setTimeout(() => {
+          console.warn('[TuxSocket Warning] Pong timeout reached! Forcing socket reconnect...');
+          if (globalChatSocket) {
+            try { globalChatSocket.terminate ? globalChatSocket.terminate() : globalChatSocket.close(); } catch {}
+          }
+        }, 15000);
       }
     }, 30000);
   });
@@ -481,7 +507,10 @@ function connectGlobalChat(username) {
   globalChatSocket.on('message', (data) => {
     try {
       const packet = JSON.parse(data.toString());
-      if (packet.type === 'pong') return;
+      if (packet.type === 'pong') {
+        if (pongTimeout) clearTimeout(pongTimeout);
+        return;
+      }
 
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('network-packet', packet);
@@ -491,9 +520,28 @@ function connectGlobalChat(username) {
 
   globalChatSocket.on('close', () => {
     if (pingInterval) clearInterval(pingInterval);
+    if (pongTimeout) clearTimeout(pongTimeout);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('network-status', { connected: false });
+    }
+
+    if (!isExplicitlyLoggingOut) {
+      const backoffDelay = Math.min(10000, 1000 * Math.pow(1.5, reconnectAttempts));
+      reconnectAttempts++;
+      console.log(`[TuxSocket] Connection closed. Reconnecting in ${Math.round(backoffDelay / 1000)}s (Attempt ${reconnectAttempts})...`);
+      
+      setTimeout(() => {
+        if (currentActiveUsername && !isExplicitlyLoggingOut) {
+          connectGlobalChat(currentActiveUsername);
+        }
+      }, backoffDelay);
+    }
   });
 
-  globalChatSocket.on('error', (err) => {});
+  globalChatSocket.on('error', (err) => {
+    console.error('[TuxSocket Error]:', err.message);
+  });
 }
 
 // --- SHUTDOWN CLEANUP HOOK ---
@@ -561,14 +609,16 @@ ipcMain.handle('send-friend-request', async (event, { targetUsername, senderUser
       return { success: false, message: 'Launcher is not connected to backend server.' };
     }
 
+    const cleanTarget = targetUsername.trim();
     const packet = {
       type: 'friend_request',
-      target: targetUsername.toLowerCase().trim(),
+      target: cleanTarget.toLowerCase(),
+      pristineTarget: cleanTarget,
       from: senderUsername.trim()
     };
 
     globalChatSocket.send(JSON.stringify(packet));
-    return { success: true, message: `Friend request sent to ${targetUsername.trim()}!` };
+    return { success: true, message: `Friend request sent to ${cleanTarget}!` };
   } catch (err) {
     return { success: false, message: 'Failed to send friend request.' };
   }
@@ -592,17 +642,27 @@ ipcMain.handle('respond-friend-request', async (event, { targetUsername, action,
 
 ipcMain.handle('remove-friend', async (event, { targetUsername, currentUser }) => {
   try {
+    if (!targetUsername) {
+      return { success: false, message: 'Invalid target username.' };
+    }
+
+    const cleanTarget = targetUsername.trim();
+    const cleanUser = currentUser ? currentUser.trim() : (currentActiveUsername || 'Player');
+
     if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
       const packet = {
         type: 'remove_friend',
-        target: targetUsername.toLowerCase().trim(),
-        from: currentUser ? currentUser.trim() : (currentActiveUsername || 'Player')
+        target: cleanTarget.toLowerCase(),
+        pristineTarget: cleanTarget,
+        from: cleanUser
       };
       globalChatSocket.send(JSON.stringify(packet));
+      return { success: true, message: `Successfully removed ${cleanTarget}` };
     }
-    return { success: true };
+    
+    return { success: false, message: 'Backend socket disconnected.' };
   } catch (err) {
-    return { success: true }; // Prevent unhandled rejection popup and process locally
+    return { success: true }; // Force local cleanup fallback if socket fails
   }
 });
 
