@@ -212,56 +212,58 @@
           <button class="download-btn" style="padding: 8px 16px; font-size: 13px;" onclick="openCreateInstanceModal()">+ Create Instance</button>
         </div>
 
-        <div id="instances-list-grid" class="mod-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;">
-          <p class="subtext">No instances created yet.</p>
-        </div>
-
-        <div id="instance-detail-container" class="hidden" style="margin-top: 24px; background: rgba(20,20,31,0.95); border: 1px solid #A855F7; border-radius: 12px; padding: 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <button class="secondary-btn" style="padding: 4px 10px; font-size: 12px;" onclick="closeInstanceDetail()">← Back</button>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <h3 id="instance-detail-title" style="margin: 0; font-size: 16px; color: #fff;">Instance Name</h3>
-                <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openRenameInstanceModal()" title="Rename Instance">Rename</button>
-              </div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="download-btn" style="padding: 6px 14px; font-size: 12px; background: #4ADE80; color: #000;" onclick="launchActiveInstance()">▶ Join / Launch</button>
-            </div>
+        <div id="instances-wrapper" class="instances-wrapper">
+          <div id="instances-list-grid" class="instances-grid">
+            <p class="subtext">No instances created yet.</p>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED MODS IN INSTANCE</h4>
-                <div style="display: flex; gap: 6px;">
-                  <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('mods')">📂 Open Folder</button>
-                  <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('mods')">＋ Add Mods</button>
+          <div id="instance-detail-container" class="hidden" style="background: rgba(20,20,31,0.95); border: 1px solid #A855F7; border-radius: 12px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="secondary-btn" style="padding: 4px 10px; font-size: 12px;" onclick="closeInstanceDetail()">← Back</button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <h3 id="instance-detail-title" style="margin: 0; font-size: 16px; color: #fff;">Instance Name</h3>
+                  <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openRenameInstanceModal()" title="Rename Instance">Rename</button>
                 </div>
               </div>
-              <div id="instance-mods-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
+              <div style="display: flex; gap: 8px;">
+                <button class="download-btn" style="padding: 6px 14px; font-size: 12px; background: #4ADE80; color: #000;" onclick="launchActiveInstance()">▶ Join / Launch</button>
+              </div>
             </div>
 
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED RESOURCE PACKS</h4>
-                <div style="display: flex; gap: 6px;">
-                  <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('resourcepacks')">📂 Open Folder</button>
-                  <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('resourcepacks')">＋ Add Pack</button>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED MODS IN INSTANCE</h4>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('mods')">📂 Open Folder</button>
+                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('mods')">＋ Add Mods</button>
+                  </div>
                 </div>
+                <div id="instance-mods-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
               </div>
-              <div id="instance-packs-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
-            </div>
 
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED SHADERS</h4>
-                <div style="display: flex; gap: 6px;">
-                  <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('shaderpacks')">📂 Open Folder</button>
-                  <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('shaderpacks')">＋ Add Shader</button>
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED RESOURCE PACKS</h4>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('resourcepacks')">📂 Open Folder</button>
+                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('resourcepacks')">＋ Add Pack</button>
+                  </div>
                 </div>
+                <div id="instance-packs-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
               </div>
-              <div id="instance-shaders-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
+
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED SHADERS</h4>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('shaderpacks')">📂 Open Folder</button>
+                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('shaderpacks')">＋ Add Shader</button>
+                  </div>
+                </div>
+                <div id="instance-shaders-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -865,17 +867,17 @@
     }
 
     grid.innerHTML = instances.map(inst => `
-      <div class="mod-card" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div class="instance-card">
+        <div class="instance-card-header">
           <div>
-            <strong style="font-size: 15px; color: #fff; display: block; margin-bottom: 2px;">${inst.name}</strong>
-            <span class="subtext" style="font-size: 11px;">MC ${inst.version} · ${inst.loader.toUpperCase()}</span>
+            <div class="instance-card-title">${inst.name}</div>
+            <span class="instance-meta-badge">MC ${inst.version} · ${inst.loader.toUpperCase()}</span>
           </div>
           <button class="delete-icon-btn" onclick="deleteInstance('${inst.id}')" title="Delete Instance">🗑️</button>
         </div>
-        <div style="display: flex; gap: 8px; margin-top: auto;">
-          <button class="download-btn" style="flex: 1; padding: 6px; font-size: 12px; background: #4ADE80; color: #000;" onclick="joinInstance('${inst.id}')">▶ Join / Launch</button>
-          <button class="secondary-btn" style="flex: 1; padding: 6px; font-size: 12px;" onclick="manageInstance('${inst.id}', '${inst.name.replace(/'/g, "\\'")}', '${inst.version}', '${inst.loader}')">Manage</button>
+        <div class="instance-card-actions">
+          <button class="instance-action-launch" onclick="joinInstance('${inst.id}')">▶ Launch</button>
+          <button class="instance-action-manage" onclick="manageInstance('${inst.id}', '${inst.name.replace(/'/g, "\\'")}', '${inst.version}', '${inst.loader}')">Manage</button>
         </div>
       </div>
     `).join('');
@@ -898,7 +900,7 @@
 
   window.manageInstance = async (instanceId, instanceName, version, loader) => {
     activeInstanceContext = { id: instanceId, name: instanceName, version, loader };
-    document.getElementById('instances-list-grid').closest('div').style.display = 'none';
+    document.getElementById('instances-list-grid').style.display = 'none';
     document.getElementById('instance-detail-container').classList.remove('hidden');
     document.getElementById('instance-detail-title').innerText = `Instance: ${instanceName} (MC ${version} · ${loader.toUpperCase()})`;
     await refreshInstanceContents();
@@ -907,7 +909,7 @@
   window.closeInstanceDetail = () => {
     activeInstanceContext = null;
     document.getElementById('instance-detail-container').classList.add('hidden');
-    document.getElementById('instances-list-grid').closest('div').style.display = 'block';
+    document.getElementById('instances-list-grid').style.display = 'grid';
     loadInstancesList();
   };
 
@@ -1472,16 +1474,21 @@
       `Are you sure you want to remove ${friendName} from your friends?`,
       async () => {
         const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
-        const res = await ipcRenderer.invoke('remove-friend', {
-          targetUsername: friendName,
-          currentUser: currentUser
-        });
+        try {
+          const res = await ipcRenderer.invoke('remove-friend', {
+            targetUsername: friendName,
+            currentUser: currentUser
+          });
 
-        if (res.success) {
+          if (!res || res.success !== false) {
+            removeFriendFromListUI(friendName);
+            showTuxToast(`Removed ${friendName} from friends.`);
+          } else {
+            showTuxAlert('Error', res.message || `Failed to unfriend ${friendName}.`);
+          }
+        } catch (err) {
           removeFriendFromListUI(friendName);
           showTuxToast(`Removed ${friendName} from friends.`);
-        } else {
-          showTuxAlert('Error', `Failed to unfriend ${friendName}.`);
         }
       }
     );
@@ -1620,6 +1627,8 @@
 
     const rawStatus = typeof friendData === 'object' ? (friendData.status || '') : '';
     const isOnlineFlag = typeof friendData === 'object' ? friendData.isOnline : undefined;
+    const isOfflineAccountType = typeof friendData === 'object' && friendData.type === 'offline';
+    
     const session = typeof friendData === 'object' ? friendData.session : null;
     const isHosting = session && session.serverIp;
     const startTime = session?.startTime || null;
@@ -1640,7 +1649,7 @@
     }
 
     let statusClass = isOnline ? 'status-online' : 'status-offline';
-    let statusTextLabel = isOnline ? 'Online' : formatOfflineDuration(lastSeen, friendUsername);
+    let statusTextLabel = isOnline ? (isOfflineAccountType ? 'Online (Offline Account)' : 'Online') : formatOfflineDuration(lastSeen, friendUsername);
 
     if (isHosting || ['playing', 'hosting'].includes(rawStatus.toLowerCase())) {
       statusClass = 'status-playing';
@@ -1679,6 +1688,7 @@
         <div class="friend-details">
           <div class="friend-name-row">
             <strong class="friend-name">${friendUsername}</strong>
+            ${isOfflineAccountType ? '<span class="badge" style="font-size: 8px; padding: 1px 4px; background: #64748B;">OFFLINE ACC</span>' : ''}
             <span class="session-timer badge ${startTime ? '' : 'hidden'}">
               ${formatSessionDuration(startTime)}
             </span>
@@ -1877,7 +1887,8 @@
           status: finalStatus,
           lastSeen: finalLastSeen,
           session: packet.session,
-          isOnline: packet.isOnline
+          isOnline: packet.isOnline,
+          type: packet.type
         });
       }
     }

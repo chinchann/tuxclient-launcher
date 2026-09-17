@@ -149,6 +149,107 @@ body {
   display: none !important;
 }
 
+/* --- INSTANCES MANAGER REDESIGN --- */
+.instances-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.instances-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.instance-card {
+  background: rgba(20, 20, 31, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.instance-card:hover {
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(20, 20, 31, 0.85);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.instance-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.instance-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.instance-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(168, 85, 247, 0.1);
+  color: #c084fc;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.instance-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.instance-action-launch {
+  flex: 1;
+  background: #22c55e !important;
+  color: #0d0d11 !important;
+  font-weight: 600 !important;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.instance-action-launch:hover {
+  background: #16a34a !important;
+}
+
+.instance-action-manage {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  font-weight: 600 !important;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.instance-action-manage:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 /* ANCHORED CONTEXT MENU OVERLAY */
 #friend-context-menu {
   position: fixed !important;

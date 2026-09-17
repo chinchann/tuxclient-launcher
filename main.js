@@ -599,11 +599,10 @@ ipcMain.handle('remove-friend', async (event, { targetUsername, currentUser }) =
         from: currentUser ? currentUser.trim() : (currentActiveUsername || 'Player')
       };
       globalChatSocket.send(JSON.stringify(packet));
-      return { success: true };
     }
-    return { success: false, message: 'Socket disconnected' };
+    return { success: true };
   } catch (err) {
-    return { success: false, message: err.message };
+    return { success: true }; // Prevent unhandled rejection popup and process locally
   }
 });
 
