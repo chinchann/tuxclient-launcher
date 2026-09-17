@@ -444,7 +444,7 @@ let pingInterval = null;
 
 function connectGlobalChat(username) {
   const normalizedUsername = username.toLowerCase().trim();
-  currentActiveUsername = username;
+  currentActiveUsername = username.trim();
 
   if (globalChatSocket) {
     try { globalChatSocket.close(); } catch {}
@@ -457,14 +457,14 @@ function connectGlobalChat(username) {
   globalChatSocket.on('open', () => {
     const authPacket = {
       type: 'auth',
-      username: username,
+      username: username.trim(),
       uuid: normalizedUsername
     };
     globalChatSocket.send(JSON.stringify(authPacket));
 
     const initialPresence = {
       type: 'presence_update',
-      username: username,
+      username: username.trim(),
       status: 'online',
       session: null
     };
@@ -505,7 +505,7 @@ ipcMain.on('app-shutdown-cleanup', (event, { username }) => {
     try {
       globalChatSocket.send(JSON.stringify({
         type: 'logout',
-        username: username,
+        username: username.trim(),
         timestamp: Date.now()
       }));
     } catch (err) {
@@ -540,7 +540,7 @@ ipcMain.handle('send-global-message', (event, { sender, text }) => {
   if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
     const packet = {
       type: 'global_chat',
-      sender: sender,
+      sender: sender ? sender.trim() : 'Player',
       text: text,
       timestamp: Date.now()
     };
@@ -550,7 +550,7 @@ ipcMain.handle('send-global-message', (event, { sender, text }) => {
   return { success: false, message: 'Global chat server disconnected.' };
 });
 
-// --- FRIEND SYSTEM IPC HANDLERS ---
+// --- FRIEND SYSTEM IPC HANDLERS (NORMALIZED FOR ONLINE & OFFLINE INTERACTION) ---
 ipcMain.handle('send-friend-request', async (event, { targetUsername, senderUsername }) => {
   try {
     if (!targetUsername || !senderUsername) {
@@ -564,11 +564,11 @@ ipcMain.handle('send-friend-request', async (event, { targetUsername, senderUser
     const packet = {
       type: 'friend_request',
       target: targetUsername.toLowerCase().trim(),
-      from: senderUsername
+      from: senderUsername.trim()
     };
 
     globalChatSocket.send(JSON.stringify(packet));
-    return { success: true, message: `Friend request sent to ${targetUsername}!` };
+    return { success: true, message: `Friend request sent to ${targetUsername.trim()}!` };
   } catch (err) {
     return { success: false, message: 'Failed to send friend request.' };
   }
@@ -580,7 +580,7 @@ ipcMain.handle('respond-friend-request', async (event, { targetUsername, action,
       const packet = {
         type: action === 'accept' ? 'friend_accept' : 'friend_decline',
         target: targetUsername.toLowerCase().trim(),
-        from: currentUser
+        from: currentUser ? currentUser.trim() : (currentActiveUsername || 'Player')
       };
       globalChatSocket.send(JSON.stringify(packet));
     }
@@ -596,7 +596,7 @@ ipcMain.handle('remove-friend', async (event, { targetUsername, currentUser }) =
       const packet = {
         type: 'remove_friend',
         target: targetUsername.toLowerCase().trim(),
-        from: currentUser
+        from: currentUser ? currentUser.trim() : (currentActiveUsername || 'Player')
       };
       globalChatSocket.send(JSON.stringify(packet));
       return { success: true };
@@ -911,7 +911,7 @@ ipcMain.on('launch-game', async (event, config) => {
     if (authData && authData.mclcAuth) {
       authData = authData.mclcAuth;
     } else if (!authData) {
-      const fallbackName = (config && config.username) ? config.username : (currentActiveUsername || "Player");
+      const fallbackName = (config && config.username) ? config.username.trim() : (currentActiveUsername || "Player");
       authData = {
         access_token: "offline_token",
         client_token: "offline_client",
