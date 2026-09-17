@@ -217,8 +217,8 @@ body {
 
 .instance-action-launch {
   flex: 1;
-  background: #22c55e !important;
-  color: #0d0d11 !important;
+  background: var(--accent-primary) !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
   border: none;
   padding: 8px 12px;
@@ -229,7 +229,7 @@ body {
 }
 
 .instance-action-launch:hover {
-  background: #16a34a !important;
+  background: var(--accent-secondary) !important;
 }
 
 .instance-action-manage {
