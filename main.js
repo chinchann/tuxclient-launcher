@@ -439,6 +439,21 @@ ipcMain.on('window-maximize', (event) => {
 });
 ipcMain.on('window-close', (event) => BrowserWindow.fromWebContents(event.sender)?.close());
 
+// --- OFFLINE ACCOUNT MOJANG API VERIFICATION HANDLER ---
+ipcMain.handle('check-mojang-username', async (event, username) => {
+  try {
+    if (!username || typeof username !== 'string') return { taken: false };
+    const cleanName = username.trim();
+    const response = await axios.get(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(cleanName)}`, { timeout: 6000 });
+    if (response.status === 200 && response.data && response.data.name) {
+      return { taken: true, officialName: response.data.name };
+    }
+  } catch (err) {
+    // If API request fails or returns 404/not found, it means the username is not taken by an official paid account
+  }
+  return { taken: false };
+});
+
 // --- LAUNCHER WEBSOCKET & RENDER KEEP-ALIVE (WITH AUTO-RECONNECT & WATCHDOG) ---
 let globalChatSocket = null;
 let pingInterval = null;
@@ -458,7 +473,12 @@ function connectGlobalChat(username) {
   if (pingInterval) clearInterval(pingInterval);
   if (pongTimeout) clearTimeout(pongTimeout);
 
-  const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(normalizedUsername)}`;
+  // Check if current active account is offline to pass type flag to backend
+  const savedAccs = JSON.parse(safeLocalStorageGet('tux_accounts') || '[]');
+  const matchedAcc = savedAccs.find(a => a.name && a.name.toLowerCase() === normalizedUsername);
+  const isOfflineAcc = matchedAcc ? matchedAcc.type === 'offline' : false;
+
+  const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(normalizedUsername)}&type=${isOfflineAcc ? 'offline' : 'microsoft'}`;
   console.log(`[TuxSocket] Connecting to backend: ${connectionUrl}`);
   
   globalChatSocket = new WebSocket(connectionUrl);
@@ -474,7 +494,8 @@ function connectGlobalChat(username) {
     const authPacket = {
       type: 'auth',
       username: username.trim(),
-      uuid: normalizedUsername
+      uuid: normalizedUsername,
+      accountType: isOfflineAcc ? 'offline' : 'microsoft'
     };
     globalChatSocket.send(JSON.stringify(authPacket));
 
@@ -482,6 +503,7 @@ function connectGlobalChat(username) {
       type: 'presence_update',
       username: username.trim(),
       status: 'online',
+      accountType: isOfflineAcc ? 'offline' : 'microsoft',
       session: null
     };
     globalChatSocket.send(JSON.stringify(initialPresence));
@@ -542,6 +564,18 @@ function connectGlobalChat(username) {
   globalChatSocket.on('error', (err) => {
     console.error('[TuxSocket Error]:', err.message);
   });
+}
+
+// Safe local storage file cache reader for main process
+function safeLocalStorageGet(key) {
+  try {
+    const filePath = path.join(TUX_ROOT, 'config_cache.json');
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return data[key] || null;
+    }
+  } catch (e) {}
+  return null;
 }
 
 // --- SHUTDOWN CLEANUP HOOK ---
@@ -689,6 +723,7 @@ ipcMain.on('microsoft-login', async () => {
     const accountData = {
       name: token.profile.name,
       uuid: token.profile.id,
+      type: 'microsoft', // Explicitly marked as a Microsoft account
       mclcAuth: token.mclc(),
       refreshToken: xboxManager.msToken?.refresh_token || xboxManager.refreshToken || null
     };
@@ -715,6 +750,7 @@ ipcMain.handle('refresh-account-session', async (event, savedAccount) => {
     const updatedAccount = {
       name: token.profile.name,
       uuid: token.profile.id,
+      type: 'microsoft', // Preserve type on refresh
       mclcAuth: token.mclc(),
       refreshToken: xboxManager.msToken?.refresh_token || savedAccount.refreshToken
     };

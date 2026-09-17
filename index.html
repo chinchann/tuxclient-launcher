@@ -227,7 +227,8 @@
                 </div>
               </div>
               <div style="display: flex; gap: 8px;">
-                <button class="download-btn" style="padding: 6px 14px; font-size: 12px; background: #4ADE80; color: #000;" onclick="launchActiveInstance()">▶ Join / Launch</button>
+                <!-- Updated button to purple theme (#A855F7) -->
+                <button class="download-btn" style="padding: 6px 14px; font-size: 12px; background: #A855F7; color: #fff;" onclick="launchActiveInstance()">▶ Join / Launch</button>
               </div>
             </div>
 
@@ -236,8 +237,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED MODS IN INSTANCE</h4>
                   <div style="display: flex; gap: 6px;">
-                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('mods')">📂 Open Folder</button>
-                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('mods')">＋ Add Mods</button>
+                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('mods')">Open Folder</button>
+                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('mods')">Add Mods</button>
                   </div>
                 </div>
                 <div id="instance-mods-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
@@ -247,8 +248,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED RESOURCE PACKS</h4>
                   <div style="display: flex; gap: 6px;">
-                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('resourcepacks')">📂 Open Folder</button>
-                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('resourcepacks')">＋ Add Pack</button>
+                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('resourcepacks')">Open Folder</button>
+                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('resourcepacks')">Add Pack</button>
                   </div>
                 </div>
                 <div id="instance-packs-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
@@ -258,8 +259,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <h4 style="color: #A855F7; font-size: 13px; margin: 0;">INSTALLED SHADERS</h4>
                   <div style="display: flex; gap: 6px;">
-                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('shaderpacks')">📂 Open Folder</button>
-                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('shaderpacks')">＋ Add Shader</button>
+                    <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openInstanceSubfolder('shaderpacks')">Open Folder</button>
+                    <button class="download-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openClientItemPicker('shaderpacks')">Add Shader</button>
                   </div>
                 </div>
                 <div id="instance-shaders-list" class="mod-grid" style="display: flex; flex-direction: column; gap: 6px;"></div>
@@ -678,6 +679,16 @@
     </div>
   </div>
 
+  <!-- DUPLICATE SESSION CONFLICT MODAL -->
+  <div id="duplicate-session-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(13,13,17,0.95); z-index: 10005; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div style="background: #14141F; border: 1px solid #EF4444; border-radius: 12px; padding: 28px; width: 380px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div style="background: rgba(239, 68, 68, 0.1); color: #EF4444; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px;">ACTIVE SESSION CONFLICT</div>
+      <h2 style="margin: 0 0 8px 0; color: #fff; font-size: 20px;">Duplicate Instance Detected</h2>
+      <p style="color: #9CA3AF; margin: 0 0 20px 0; font-size: 13px; line-height: 1.5;">An active session for this account is already open in another window or tab. Closing this duplicate instance prevents connection drops.</p>
+      <button id="close-duplicate-btn" class="tux-btn-danger" style="width: 100%; padding: 10px; font-weight: bold;">Close This Tab / Window</button>
+    </div>
+  </div>
+
   <div id="tux-custom-modal" class="tux-modal-overlay">
     <div class="tux-modal-card">
       <h3 id="tux-modal-title" class="tux-modal-title">Notice</h3>
@@ -752,12 +763,33 @@
   <script>
   const { ipcRenderer } = require('electron');
 
+  // --- DUPLICATE SESSION MODAL HANDLERS ---
+  function handleDuplicateSession() {
+    const modal = document.getElementById('duplicate-session-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  }
+
+  // Listen to storage changes to catch when another window/tab is opened or writes the active session
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'tux_active_account' && event.newValue) {
+      handleDuplicateSession();
+    }
+  });
+
+  document.getElementById('close-duplicate-btn')?.addEventListener('click', () => {
+    ipcRenderer.send('window-close');
+  });
+
   // --- CUSTOM MODAL & TOAST HELPERS ---
   function showTuxAlert(title, message, callback) {
     const overlay = document.getElementById('tux-custom-modal');
     const titleEl = document.getElementById('tux-modal-title');
     const descEl = document.getElementById('tux-modal-desc');
     const btnContainer = document.getElementById('tux-modal-buttons');
+
+    if (!overlay || !titleEl || !descEl || !btnContainer) return;
 
     titleEl.innerText = title;
     descEl.innerText = message;
@@ -776,6 +808,8 @@
     const titleEl = document.getElementById('tux-modal-title');
     const descEl = document.getElementById('tux-modal-desc');
     const btnContainer = document.getElementById('tux-modal-buttons');
+
+    if (!overlay || !titleEl || !descEl || !btnContainer) return;
 
     titleEl.innerText = title;
     descEl.innerText = message;
@@ -819,11 +853,12 @@
 
   window.openCreateInstanceModal = () => {
     const modal = document.getElementById('create-instance-modal');
-    document.getElementById('modal-instance-name').value = '';
+    const nameInput = document.getElementById('modal-instance-name');
+    if (nameInput) nameInput.value = '';
     const verSelect = document.getElementById('modal-instance-version');
     
     const mainVerSelect = document.getElementById('version-select');
-    if (mainVerSelect && mainVerSelect.options.length > 0) {
+    if (verSelect && mainVerSelect && mainVerSelect.options.length > 0) {
       verSelect.innerHTML = mainVerSelect.innerHTML;
     }
     modal?.classList.add('active');
@@ -876,7 +911,8 @@
           <button class="delete-icon-btn" onclick="deleteInstance('${inst.id}')" title="Delete Instance">🗑️</button>
         </div>
         <div class="instance-card-actions">
-          <button class="instance-action-launch" onclick="joinInstance('${inst.id}')">▶ Launch</button>
+          <!-- Changed background to purple theme (#A855F7) -->
+          <button class="instance-action-launch" style="background: #A855F7; color: #fff;" onclick="joinInstance('${inst.id}')">▶ Launch</button>
           <button class="instance-action-manage" onclick="manageInstance('${inst.id}', '${inst.name.replace(/'/g, "\\'")}', '${inst.version}', '${inst.loader}')">Manage</button>
         </div>
       </div>
@@ -900,16 +936,23 @@
 
   window.manageInstance = async (instanceId, instanceName, version, loader) => {
     activeInstanceContext = { id: instanceId, name: instanceName, version, loader };
-    document.getElementById('instances-list-grid').style.display = 'none';
-    document.getElementById('instance-detail-container').classList.remove('hidden');
-    document.getElementById('instance-detail-title').innerText = `Instance: ${instanceName} (MC ${version} · ${loader.toUpperCase()})`;
+    const grid = document.getElementById('instances-list-grid');
+    const detailContainer = document.getElementById('instance-detail-container');
+    const titleEl = document.getElementById('instance-detail-title');
+
+    if (grid) grid.style.display = 'none';
+    if (detailContainer) detailContainer.classList.remove('hidden');
+    if (titleEl) titleEl.innerText = `Instance: ${instanceName} (MC ${version} · ${loader.toUpperCase()})`;
     await refreshInstanceContents();
   };
 
   window.closeInstanceDetail = () => {
     activeInstanceContext = null;
-    document.getElementById('instance-detail-container').classList.add('hidden');
-    document.getElementById('instances-list-grid').style.display = 'grid';
+    const detailContainer = document.getElementById('instance-detail-container');
+    const grid = document.getElementById('instances-list-grid');
+
+    if (detailContainer) detailContainer.classList.add('hidden');
+    if (grid) grid.style.display = 'grid';
     loadInstancesList();
   };
 
@@ -917,9 +960,9 @@
     if (!activeInstanceContext) return;
     const modal = document.getElementById('rename-instance-modal');
     const input = document.getElementById('modal-rename-input');
-    input.value = activeInstanceContext.name;
+    if (input) input.value = activeInstanceContext.name;
     modal?.classList.add('active');
-    setTimeout(() => input.focus(), 50);
+    setTimeout(() => input?.focus(), 50);
   };
 
   document.getElementById('rename-modal-submit')?.addEventListener('click', async () => {
@@ -935,7 +978,8 @@
 
     if (res.success) {
       activeInstanceContext.name = newName;
-      document.getElementById('instance-detail-title').innerText = `Instance: ${newName} (MC ${activeInstanceContext.version} · ${activeInstanceContext.loader.toUpperCase()})`;
+      const titleEl = document.getElementById('instance-detail-title');
+      if (titleEl) titleEl.innerText = `Instance: ${newName} (MC ${activeInstanceContext.version} · ${activeInstanceContext.loader.toUpperCase()})`;
       showTuxToast(`Instance renamed to: ${newName}`);
     } else {
       showTuxAlert('Error', res.message || 'Failed to rename instance.');
@@ -950,30 +994,36 @@
     
     // Render Mods
     const modsList = document.getElementById('instance-mods-list');
-    modsList.innerHTML = (data.mods && data.mods.length > 0) ? data.mods.map(m => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
-        <span style="font-size: 13px; color: #fff;">${m.name}</span>
-        <button class="delete-icon-btn" onclick="deleteItemFromInstance('${id}', 'mods', '${m.fileName.replace(/'/g, "\\'")}')" title="Delete Mod">🗑️</button>
-      </div>
-    `).join('') : '<p class="subtext">No mods installed in this instance.</p>';
+    if (modsList) {
+      modsList.innerHTML = (data.mods && data.mods.length > 0) ? data.mods.map(m => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
+          <span style="font-size: 13px; color: #fff;">${m.name}</span>
+          <button class="delete-icon-btn" onclick="deleteItemFromInstance('${id}', 'mods', '${m.fileName.replace(/'/g, "\\'")}')" title="Delete Mod">🗑️</button>
+        </div>
+      `).join('') : '<p class="subtext">No mods installed in this instance.</p>';
+    }
 
     // Render Resource Packs
     const packsList = document.getElementById('instance-packs-list');
-    packsList.innerHTML = (data.resourcepacks && data.resourcepacks.length > 0) ? data.resourcepacks.map(p => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
-        <span style="font-size: 13px; color: #fff;">${p.name}</span>
-        <button class="delete-icon-btn" onclick="deleteItemFromInstance('${id}', 'resourcepacks', '${p.fileName.replace(/'/g, "\\'")}')" title="Delete Resource Pack">🗑️</button>
-      </div>
-    `).join('') : '<p class="subtext">No resource packs installed.</p>';
+    if (packsList) {
+      packsList.innerHTML = (data.resourcepacks && data.resourcepacks.length > 0) ? data.resourcepacks.map(p => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
+          <span style="font-size: 13px; color: #fff;">${p.name}</span>
+          <button class="delete-icon-btn" onclick="deleteItemFromInstance('${id}', 'resourcepacks', '${p.fileName.replace(/'/g, "\\'")}')" title="Delete Resource Pack">🗑️</button>
+        </div>
+      `).join('') : '<p class="subtext">No resource packs installed.</p>';
+    }
 
     // Render Shaders
     const shadersList = document.getElementById('instance-shaders-list');
-    shadersList.innerHTML = (data.shaders && data.shaders.length > 0) ? data.shaders.map(s => `
-      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
-        <span style="font-size: 13px; color: #fff;">${s.name}</span>
-        <button class="delete-icon-btn" onclick="deleteItemFromInstance('${id}', 'shaderpacks', '${s.fileName.replace(/'/g, "\\'")}')" title="Delete Shader">🗑️</button>
-      </div>
-    `).join('') : '<p class="subtext">No shaders installed.</p>';
+    if (shadersList) {
+      shadersList.innerHTML = (data.shaders && data.shaders.length > 0) ? data.shaders.map(s => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
+          <span style="font-size: 13px; color: #fff;">${s.name}</span>
+          <button class="delete-icon-btn" onclick="deleteItemFromInstance('${id}', 'shaderpacks', '${s.fileName.replace(/'/g, "\\'")}')" title="Delete Shader">🗑️</button>
+        </div>
+      `).join('') : '<p class="subtext">No shaders installed.</p>';
+    }
   }
 
   window.openInstanceSubfolder = async (contentType) => {
@@ -987,6 +1037,7 @@
     const titleEl = document.getElementById('client-picker-title');
     const descEl = document.getElementById('client-picker-desc');
     const listEl = document.getElementById('client-picker-list');
+    if (!modal || !titleEl || !descEl || !listEl) return;
 
     const typeNames = {
       'mods': { title: 'Add Mods from Client', desc: `Select downloaded mods for MC ${activeInstanceContext.version} (${activeInstanceContext.loader.toUpperCase()}):` },
@@ -999,7 +1050,6 @@
     listEl.innerHTML = '<p class="subtext">Scanning client files...</p>';
     modal.classList.add('active');
 
-    // Pass instance version & loader so items are filtered strictly to compatible environments
     const clientItems = await ipcRenderer.invoke('get-client-downloaded-items', contentType, activeInstanceContext.version, activeInstanceContext.loader);
 
     if (!clientItems || clientItems.length === 0) {
@@ -1014,29 +1064,32 @@
       </label>
     `).join('');
 
-    document.getElementById('client-picker-submit').onclick = async () => {
-      const checkboxes = listEl.querySelectorAll('.client-item-checkbox:checked');
-      const selectedFileNames = Array.from(checkboxes).map(cb => cb.value);
+    const submitBtn = document.getElementById('client-picker-submit');
+    if (submitBtn) {
+      submitBtn.onclick = async () => {
+        const checkboxes = listEl.querySelectorAll('.client-item-checkbox:checked');
+        const selectedFileNames = Array.from(checkboxes).map(cb => cb.value);
 
-      if (selectedFileNames.length === 0) {
-        showTuxAlert('Error', 'Please select at least one item.');
-        return;
-      }
+        if (selectedFileNames.length === 0) {
+          showTuxAlert('Error', 'Please select at least one item.');
+          return;
+        }
 
-      modal.classList.remove('active');
-      const res = await ipcRenderer.invoke('copy-client-items-to-instance', {
-        instanceId: activeInstanceContext.id,
-        contentType,
-        fileNames: selectedFileNames
-      });
+        modal.classList.remove('active');
+        const res = await ipcRenderer.invoke('copy-client-items-to-instance', {
+          instanceId: activeInstanceContext.id,
+          contentType,
+          fileNames: selectedFileNames
+        });
 
-      if (res.success) {
-        showTuxToast('Successfully added items to instance!');
-        refreshInstanceContents();
-      } else {
-        showTuxAlert('Error', res.message || 'Failed to add items.');
-      }
-    };
+        if (res.success) {
+          showTuxToast('Successfully added items to instance!');
+          refreshInstanceContents();
+        } else {
+          showTuxAlert('Error', res.message || 'Failed to add items.');
+        }
+      };
+    }
   };
 
   window.deleteItemFromInstance = async (instanceId, contentType, fileName) => {
@@ -1067,7 +1120,7 @@
     offlineModal?.classList.remove('active');
   });
 
-  offlineSubmitBtn?.addEventListener('click', () => {
+  offlineSubmitBtn?.addEventListener('click', async () => {
     const username = offlineInput ? offlineInput.value.trim() : '';
     if (!username) {
       showTuxAlert('Error', 'Please enter a valid username.');
@@ -1079,12 +1132,20 @@
       return;
     }
 
+    showTuxToast('Checking username availability...');
+    const checkRes = await ipcRenderer.invoke('check-mojang-username', username);
+
+    if (checkRes && checkRes.taken) {
+      showTuxAlert('Username Taken', `The username "${username}" belongs to a real official Minecraft account (${checkRes.officialName || username}). You cannot use it as an offline account.`);
+      return;
+    }
+
     offlineModal?.classList.remove('active');
     registerOfflineAccount(username);
   });
 
   offlineInput?.addEventListener('keyup', (e) => {
-    if (e.key === 'Enter') offlineSubmitBtn.click();
+    if (e.key === 'Enter') offlineSubmitBtn?.click();
   });
 
   function generateOfflineUUID(username) {
@@ -1435,18 +1496,19 @@
     e.preventDefault();
     e.stopPropagation();
 
-    // Explicitly grab clean username from data attribute or fallback
     activeContextTarget = targetElement.getAttribute('data-username') || username;
     
     if (muteBtn) {
       muteBtn.innerText = isMuted ? 'Unmute' : 'Mute';
     }
 
-    contextMenu.classList.remove('hidden');
+    contextMenu?.classList.remove('hidden');
 
     const rect = targetElement.getBoundingClientRect();
-    contextMenu.style.left = `${rect.left + 12}px`;
-    contextMenu.style.top = `${rect.bottom - 6}px`;
+    if (contextMenu) {
+      contextMenu.style.left = `${rect.left + 12}px`;
+      contextMenu.style.top = `${rect.bottom - 6}px`;
+    }
   }
 
   muteBtn?.addEventListener('click', (e) => {
@@ -1477,7 +1539,7 @@
       async () => {
         const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
         try {
-          const res = await ipcRenderer.invoke('remove-friend', {
+          await ipcRenderer.invoke('remove-friend', {
             targetUsername: friendName,
             currentUser: currentUser
           });
@@ -1494,20 +1556,29 @@
 
   function removeFriendFromListUI(friendUsername) {
     if (!friendUsername) return;
-    
-    const existingCards = document.querySelectorAll(`[id^="friend-card-"]`);
+    const lowerTarget = friendUsername.toLowerCase().trim();
+
+    const existingCards = document.querySelectorAll(`[id^="friend-card-"], .friend-card-item`);
     existingCards.forEach(card => {
       const storedName = card.getAttribute('data-username');
-      if (storedName && storedName.toLowerCase() === friendUsername.toLowerCase()) {
+      if (storedName && storedName.toLowerCase().trim() === lowerTarget) {
         card.remove();
       }
     });
 
     currentFriendsList.delete(friendUsername);
-    saveFriendsToLocalCache(loadFriendsFromLocalCache().filter(f => {
+    for (const f of currentFriendsList) {
+      if (f.toLowerCase().trim() === lowerTarget) {
+        currentFriendsList.delete(f);
+      }
+    }
+
+    const currentCached = loadFriendsFromLocalCache();
+    const updatedCache = currentCached.filter(f => {
       const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
-      return fName.toLowerCase() !== friendUsername.toLowerCase();
-    }));
+      return fName && fName.toLowerCase().trim() !== lowerTarget;
+    });
+    saveFriendsToLocalCache(updatedCache);
 
     if (activeFriendTimers[friendUsername]) {
       clearInterval(activeFriendTimers[friendUsername]);
@@ -1563,10 +1634,10 @@
 
   toggleChatBtn?.addEventListener('click', () => {
     privateChatPanel?.classList.add('hidden');
-    chatPanel.classList.toggle('hidden');
+    chatPanel?.classList.toggle('hidden');
   });
-  closeChatBtn?.addEventListener('click', () => chatPanel.classList.add('hidden'));
-  closePrivateChatBtn?.addEventListener('click', () => privateChatPanel.classList.add('hidden'));
+  closeChatBtn?.addEventListener('click', () => chatPanel?.classList.add('hidden'));
+  closePrivateChatBtn?.addEventListener('click', () => privateChatPanel?.classList.add('hidden'));
 
   window.openDirectChat = (friendUsername) => {
     currentActivePrivateFriend = friendUsername;
@@ -1600,7 +1671,7 @@
     }
 
     const activeUser = currentUsername || activeAccount.name;
-    const res = await ipcRenderer.invoke('init-global-chat', activeUser);
+    await ipcRenderer.invoke('init-global-chat', activeUser);
   }
 
   async function renderFriendInList(friendData) {
@@ -1740,6 +1811,7 @@
     const updateBtn = document.getElementById('update-now-btn');
     const actions = document.getElementById('update-modal-actions');
     const progressBox = document.getElementById('update-progress-box');
+    if (!modal || !msg || !updateBtn || !actions || !progressBox) return;
 
     msg.innerText = `A new version (v${version}) of TuxClient is available!`;
     progressBox.classList.add('hidden');
@@ -1767,6 +1839,7 @@
     const msg = document.getElementById('update-message');
     const actions = document.getElementById('update-modal-actions');
     const progressBox = document.getElementById('update-progress-box');
+    if (!modal || !title || !msg || !actions || !progressBox) return;
 
     title.innerText = "Update Ready!";
     msg.innerText = "TuxClient has downloaded the update. Restart now to complete installation.";
@@ -1780,6 +1853,12 @@
   });
 
   ipcRenderer.on('network-packet', async (event, packet) => {
+    // Check if the server sent a duplicate session/connection error packet
+    if (packet.type === 'duplicate_session' || packet.error === 'duplicate_session' || packet.code === 4001) {
+      handleDuplicateSession();
+      return;
+    }
+
     if (packet.type === 'initial_data') {
       const friendsContainer = document.getElementById('friends-list-container');
       if (friendsContainer) friendsContainer.innerHTML = '';
@@ -1892,36 +1971,23 @@
     }
 
     if (packet.type === 'friend_removed') {
-      // Different relay conventions (and casing differences between Microsoft
-      // accounts and offline accounts) mean we can't just trust field order here.
-      // packet.target is frequently just this client's OWN username echoed back
-      // by the backend, so blindly preferring it (old behavior) meant the friend
-      // who actually removed you never got cleared from your list. Instead, pick
-      // whichever candidate name actually matches an existing friend.
       const myName = (currentUsername || (activeAccount ? activeAccount.name : '') || '').toLowerCase();
       const candidates = [packet.pristineTarget, packet.from, packet.target, packet.username].filter(Boolean);
 
       let targetToRemove = candidates.find(c => {
-        const lower = c.toLowerCase();
+        const lower = c.toLowerCase().trim();
         if (lower === myName) return false;
-        return Array.from(currentFriendsList).some(f => f.toLowerCase() === lower);
+        return Array.from(currentFriendsList).some(f => f.toLowerCase().trim() === lower);
       });
 
       if (!targetToRemove) {
-        targetToRemove = candidates.find(c => c.toLowerCase() !== myName) || candidates[0];
+        targetToRemove = candidates.find(c => c.toLowerCase().trim() !== myName) || candidates[0];
       }
 
       if (targetToRemove) {
         const resolvedRemoved = await resolveCorrectCasing(targetToRemove);
         removeFriendFromListUI(targetToRemove);
-        showTuxToast(`${resolvedRemoved} removed you from their friends list.`);
-
-        const currentCached = loadFriendsFromLocalCache();
-        const updatedCache = currentCached.filter(f => {
-          const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
-          return fName && fName.toLowerCase() !== targetToRemove.toLowerCase();
-        });
-        saveFriendsToLocalCache(updatedCache);
+        showTuxToast(`${resolvedRemoved} removed from your friends list.`);
       }
     }
 
@@ -1975,7 +2041,7 @@
       appendChatMessage('chat-messages-container', resolvedSender, packet.text, packet.timestamp);
       
       const myName = currentUsername || (activeAccount ? activeAccount.name : '');
-      if (resolvedSender !== myName && chatPanel.classList.contains('hidden')) {
+      if (resolvedSender !== myName && chatPanel?.classList.contains('hidden')) {
         showDesktopNotification(
           `Global Chat: ${resolvedSender}`,
           packet.text,
@@ -1992,7 +2058,7 @@
       activeChatHistory[resolvedFrom].push({ sender: resolvedFrom, text: packet.text, timestamp: ts });
 
       if (!mutedFriends.has(resolvedFrom)) {
-        if (!currentActivePrivateFriend || currentActivePrivateFriend !== resolvedFrom || privateChatPanel.classList.contains('hidden')) {
+        if (!currentActivePrivateFriend || currentActivePrivateFriend !== resolvedFrom || privateChatPanel?.classList.contains('hidden')) {
           showDesktopNotification(
             `Message from ${resolvedFrom}`,
             packet.text,
@@ -2049,6 +2115,12 @@
       showTuxAlert('Error', `Error: ${result?.message || 'Failed to send request.'}`);
     }
   };
+
+  document.getElementById('add-friend-input')?.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') {
+      window.sendFriendRequest();
+    }
+  });
 
   window.respondFriendRequest = async (targetUsername, action, btnElement) => {
     const currentUser = currentUsername || (activeAccount ? activeAccount.name : '');
@@ -2504,7 +2576,8 @@
           const reader = new FileReader();
           reader.onload = (event) => {
             skinViewer.loadSkin(event.target.result);
-            document.getElementById('skin-upload-status').innerText = 'Skin loaded!';
+            const statusEl = document.getElementById('skin-upload-status');
+            if (statusEl) statusEl.innerText = 'Skin loaded!';
           };
           reader.readAsDataURL(file);
         }
@@ -2543,10 +2616,10 @@
 
     if (!sidebar) return;
 
-    titleEl.innerText = modTitle;
-    iconEl.src = modIcon || 'assets/logo.png';
-    authorEl.innerText = modAuthor ? `by ${modAuthor}` : '';
-    listEl.innerHTML = '<p class="subtext">Fetching available versions...</p>';
+    if (titleEl) titleEl.innerText = modTitle;
+    if (iconEl) iconEl.src = modIcon || 'assets/logo.png';
+    if (authorEl) authorEl.innerText = modAuthor ? `by ${modAuthor}` : '';
+    if (listEl) listEl.innerHTML = '<p class="subtext">Fetching available versions...</p>';
 
     sidebar.classList.remove('hidden');
 
@@ -2568,22 +2641,24 @@
       );
 
       if (!validVersions || validVersions.length === 0) {
-        listEl.innerHTML = `<p class="subtext">No versions found for Minecraft ${currentMcVersion} (${currentLoader}).</p>`;
+        if (listEl) listEl.innerHTML = `<p class="subtext">No versions found for Minecraft ${currentMcVersion} (${currentLoader}).</p>`;
         return;
       }
 
-      listEl.innerHTML = validVersions.map((v, idx) => `
-        <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; box-sizing: border-box; width: 100%;">
-          <div style="min-width: 0; flex: 1;">
-            <strong style="font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${v.version_number}</strong>
-            <span class="subtext" style="font-size: 10px;">${v.version_type} ${idx === 0 ? '<span class="badge" style="background:#a855f7; font-size:8px; padding: 2px 4px;">ACTIVE</span>' : ''}</span>
+      if (listEl) {
+        listEl.innerHTML = validVersions.map((v, idx) => `
+          <div class="setting-row" style="background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; box-sizing: border-box; width: 100%;">
+            <div style="min-width: 0; flex: 1;">
+              <strong style="font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${v.version_number}</strong>
+              <span class="subtext" style="font-size: 10px;">${v.version_type} ${idx === 0 ? '<span class="badge" style="background:#a855f7; font-size:8px; padding: 2px 4px;">ACTIVE</span>' : ''}</span>
+            </div>
+            <button class="download-btn" style="padding: 4px 8px; font-size: 11px; flex-shrink: 0;" onclick="installSpecificVersion('${projectId}', '${modTitle.replace(/'/g, "\\'")}', '${v.id}', '${currentMcVersion}')">Install</button>
           </div>
-          <button class="download-btn" style="padding: 4px 8px; font-size: 11px; flex-shrink: 0;" onclick="installSpecificVersion('${projectId}', '${modTitle.replace(/'/g, "\\'")}', '${v.id}', '${currentMcVersion}')">Install</button>
-        </div>
-      `).join('');
+        `).join('');
+      }
 
     } catch (err) {
-      listEl.innerHTML = '<p class="subtext">Failed to fetch mod versions.</p>';
+      if (listEl) listEl.innerHTML = '<p class="subtext">Failed to fetch mod versions.</p>';
     }
   };
 
@@ -2855,47 +2930,6 @@
       openFolderBtn.onclick = () => ipcRenderer.send('open-game-folder');
     }
   }
-
-  window.sendFriendRequest = async () => {
-    const input = document.getElementById('add-friend-input');
-    const targetUsername = input ? input.value.trim() : '';
-    const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '');
-
-    if (!senderUsername) {
-      showTuxAlert('Error', 'You must be signed in to send friend requests.');
-      return;
-    }
-
-    if (!targetUsername) {
-      showTuxAlert('Error', 'Please enter a username.');
-      return;
-    }
-
-    if (targetUsername.toLowerCase() === senderUsername.toLowerCase()) {
-      showTuxAlert('Error', 'You cannot add yourself as a friend.');
-      return;
-    }
-
-    const alreadyFriends = Array.from(currentFriendsList).some(
-      f => f.toLowerCase() === targetUsername.toLowerCase()
-    );
-    if (alreadyFriends) {
-      showTuxAlert('Notice', `You are already friends with ${targetUsername}.`);
-      return;
-    }
-
-    const result = await ipcRenderer.invoke('send-friend-request', {
-      targetUsername: targetUsername,
-      senderUsername: senderUsername
-    });
-
-    if (result && result.success !== false) {
-      showTuxToast(`Friend request sent to ${targetUsername}!`);
-      if (input) input.value = '';
-    } else {
-      showTuxAlert('Error', `Error: ${result?.message || 'Failed to send request.'}`);
-    }
-  };
   </script>
 </body>
 </html>
