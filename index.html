@@ -222,7 +222,7 @@
               <button class="secondary-btn" style="padding: 4px 10px; font-size: 12px;" onclick="closeInstanceDetail()">← Back</button>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <h3 id="instance-detail-title" style="margin: 0; font-size: 16px; color: #fff;">Instance Name</h3>
-                <button class="secondary-btn" style="padding: 2px 6px; font-size: 10px;" onclick="openRenameInstanceModal()" title="Rename Instance">✏️ Rename</button>
+                <button class="secondary-btn" style="padding: 3px 8px; font-size: 11px;" onclick="openRenameInstanceModal()" title="Rename Instance">Rename</button>
               </div>
             </div>
             <div style="display: flex; gap: 8px;">
@@ -875,7 +875,7 @@
         </div>
         <div style="display: flex; gap: 8px; margin-top: auto;">
           <button class="download-btn" style="flex: 1; padding: 6px; font-size: 12px; background: #4ADE80; color: #000;" onclick="joinInstance('${inst.id}')">▶ Join / Launch</button>
-          <button class="secondary-btn" style="flex: 1; padding: 6px; font-size: 12px;" onclick="manageInstance('${inst.id}', '${inst.name.replace(/'/g, "\\'")}')">Manage</button>
+          <button class="secondary-btn" style="flex: 1; padding: 6px; font-size: 12px;" onclick="manageInstance('${inst.id}', '${inst.name.replace(/'/g, "\\'")}', '${inst.version}', '${inst.loader}')">Manage</button>
         </div>
       </div>
     `).join('');
@@ -896,11 +896,11 @@
     await joinInstance(activeInstanceContext.id);
   };
 
-  window.manageInstance = async (instanceId, instanceName) => {
-    activeInstanceContext = { id: instanceId, name: instanceName };
+  window.manageInstance = async (instanceId, instanceName, version, loader) => {
+    activeInstanceContext = { id: instanceId, name: instanceName, version, loader };
     document.getElementById('instances-list-grid').closest('div').style.display = 'none';
     document.getElementById('instance-detail-container').classList.remove('hidden');
-    document.getElementById('instance-detail-title').innerText = `Instance: ${instanceName}`;
+    document.getElementById('instance-detail-title').innerText = `Instance: ${instanceName} (MC ${version} · ${loader.toUpperCase()})`;
     await refreshInstanceContents();
   };
 
@@ -933,7 +933,7 @@
 
     if (res.success) {
       activeInstanceContext.name = newName;
-      document.getElementById('instance-detail-title').innerText = `Instance: ${newName}`;
+      document.getElementById('instance-detail-title').innerText = `Instance: ${newName} (MC ${activeInstanceContext.version} · ${activeInstanceContext.loader.toUpperCase()})`;
       showTuxToast(`Instance renamed to: ${newName}`);
     } else {
       showTuxAlert('Error', res.message || 'Failed to rename instance.');
@@ -987,7 +987,7 @@
     const listEl = document.getElementById('client-picker-list');
 
     const typeNames = {
-      'mods': { title: 'Add Mods from Client', desc: 'Select mods downloaded in your client to add to this instance:' },
+      'mods': { title: 'Add Mods from Client', desc: `Select downloaded mods for MC ${activeInstanceContext.version} (${activeInstanceContext.loader.toUpperCase()}):` },
       'resourcepacks': { title: 'Add Resource Packs from Client', desc: 'Select resource packs downloaded in your client:' },
       'shaderpacks': { title: 'Add Shaders from Client', desc: 'Select shader packs downloaded in your client:' }
     };
@@ -997,10 +997,11 @@
     listEl.innerHTML = '<p class="subtext">Scanning client files...</p>';
     modal.classList.add('active');
 
-    const clientItems = await ipcRenderer.invoke('get-client-downloaded-items', contentType);
+    // Pass instance version & loader so items are filtered strictly to compatible environments
+    const clientItems = await ipcRenderer.invoke('get-client-downloaded-items', contentType, activeInstanceContext.version, activeInstanceContext.loader);
 
     if (!clientItems || clientItems.length === 0) {
-      listEl.innerHTML = `<p class="subtext">No downloaded ${contentType === 'shaderpacks' ? 'shaders' : contentType} found in your client directory.</p>`;
+      listEl.innerHTML = `<p class="subtext">No downloaded ${contentType === 'shaderpacks' ? 'shaders' : contentType} found for MC ${activeInstanceContext.version} (${activeInstanceContext.loader.toUpperCase()}).</p>`;
       return;
     }
 

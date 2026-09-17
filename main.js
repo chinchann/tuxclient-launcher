@@ -750,6 +750,7 @@ ipcMain.handle('rename-instance', async (event, { instanceId, newName }) => {
   }
 });
 
+// --- INSTANCE-AWARE CONTENT FETCHING (STRICTLY SCOPED TO SPECIFIC INSTANCE VERSION & LOADER) ---
 ipcMain.handle('get-instance-contents', async (event, instanceId) => {
   const instances = getSavedInstances();
   const inst = instances.find(i => i.id === instanceId);
@@ -759,7 +760,12 @@ ipcMain.handle('get-instance-contents', async (event, instanceId) => {
     if (!fs.existsSync(dirPath)) return [];
     return fs.readdirSync(dirPath)
       .filter(f => fs.statSync(path.join(dirPath, f)).isFile())
-      .map(f => ({ fileName: f, name: f.replace(/\.(jar|zip|disabled)$/, '') }));
+      .map(f => ({ 
+        fileName: f, 
+        name: f.replace(/\.(jar|zip|disabled)$/, ''),
+        version: inst.version,
+        loader: inst.loader
+      }));
   };
 
   return {
@@ -781,8 +787,8 @@ ipcMain.handle('open-instance-folder', async (event, { instanceId, contentType }
   return { success: true };
 });
 
-ipcMain.handle('get-client-downloaded-items', async (event, contentType) => {
-  const clientInstance = getInstancePath('1.21.1', 'fabric');
+ipcMain.handle('get-client-downloaded-items', async (event, contentType, version = '1.21.1', loader = 'fabric') => {
+  const clientInstance = getInstancePath(version, loader);
   let clientDir = clientInstance.modsDir;
   if (contentType === 'resourcepacks') clientDir = clientInstance.resourcePacksDir;
   if (contentType === 'shaderpacks') clientDir = clientInstance.shaderPacksDir;
@@ -805,7 +811,7 @@ ipcMain.handle('copy-client-items-to-instance', async (event, { instanceId, cont
   const targetDir = path.join(inst.path, contentType);
   if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
-  const clientInstance = getInstancePath('1.21.1', 'fabric');
+  const clientInstance = getInstancePath(inst.version, inst.loader);
   let clientDir = clientInstance.modsDir;
   if (contentType === 'resourcepacks') clientDir = clientInstance.resourcePacksDir;
   if (contentType === 'shaderpacks') clientDir = clientInstance.shaderPacksDir;
