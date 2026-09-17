@@ -22,12 +22,14 @@ const authManager = new Auth("select_account");
 // --- DISCORD RICH PRESENCE SETUP ---
 const DISCORD_CLIENT_ID = '1543527706875138108';
 let rpc = null;
+let sessionStartTime = null; // Persistent timestamp for the active session
 
 function initDiscordRPC() {
   rpc = new RPC.Client({ transport: 'ipc' });
 
   rpc.on('ready', () => {
     console.log('[Discord RPC] Rich Presence connected successfully!');
+    sessionStartTime = Date.now(); // Set once when RPC connects
     setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
   });
 
@@ -39,10 +41,14 @@ function initDiscordRPC() {
 function setLauncherActivity(details, state) {
   if (!rpc) return;
   try {
+    if (!sessionStartTime) {
+      sessionStartTime = Date.now();
+    }
+
     rpc.setActivity({
       details: details,
       state: state,
-      startTimestamp: Date.now(),
+      startTimestamp: sessionStartTime, // Persistent timestamp prevents timer reset
       largeImageKey: 'logo',
       largeImageText: 'TuxClient Launcher',
       instance: false,
@@ -680,7 +686,165 @@ ipcMain.handle('fetch-skin-base64', async (event, username) => {
   }
 });
 
-// --- GAME LAUNCH ROUTINE ---
+// --- INSTANCES MANAGER BACKEND STORAGE & MANAGEMENT ---
+const INSTANCES_INDEX_PATH = path.join(TUX_ROOT, 'instances_config.json');
+
+function getSavedInstances() {
+  try {
+    if (fs.existsSync(INSTANCES_INDEX_PATH)) {
+      return JSON.parse(fs.readFileSync(INSTANCES_INDEX_PATH, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveInstancesIndex(instances) {
+  try {
+    fs.writeFileSync(INSTANCES_INDEX_PATH, JSON.stringify(instances, null, 2));
+  } catch (e) {}
+}
+
+ipcMain.handle('get-instances-list', async () => {
+  return getSavedInstances();
+});
+
+ipcMain.handle('create-instance', async (event, { name, version, loader }) => {
+  try {
+    if (!name || !name.trim()) return { success: false, message: 'Instance name required.' };
+    const cleanName = name.trim();
+    const id = crypto.createHash('md5').update(cleanName + Date.now()).digest('hex').substring(0, 10);
+    
+    const instancesDir = path.join(TUX_ROOT, 'custom_instances', id);
+    const modsDir = path.join(instancesDir, 'mods');
+    const resourcepacksDir = path.join(instancesDir, 'resourcepacks');
+    const shaderpacksDir = path.join(instancesDir, 'shaderpacks');
+
+    fs.mkdirSync(modsDir, { recursive: true });
+    fs.mkdirSync(resourcepacksDir, { recursive: true });
+    fs.mkdirSync(shaderpacksDir, { recursive: true });
+
+    const instances = getSavedInstances();
+    const newInst = { id, name: cleanName, version: version || '1.21.1', loader: loader || 'fabric', path: instancesDir };
+    instances.push(newInst);
+    saveInstancesIndex(instances);
+
+    return { success: true, instance: newInst };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+ipcMain.handle('rename-instance', async (event, { instanceId, newName }) => {
+  try {
+    if (!newName || !newName.trim()) return { success: false, message: 'Instance name cannot be empty.' };
+    const cleanName = newName.trim();
+    const instances = getSavedInstances();
+    const inst = instances.find(i => i.id === instanceId);
+    if (!inst) return { success: false, message: 'Instance not found.' };
+
+    inst.name = cleanName;
+    saveInstancesIndex(instances);
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+ipcMain.handle('get-instance-contents', async (event, instanceId) => {
+  const instances = getSavedInstances();
+  const inst = instances.find(i => i.id === instanceId);
+  if (!inst || !fs.existsSync(inst.path)) return { mods: [], resourcepacks: [], shaders: [] };
+
+  const readDirSafe = (dirPath) => {
+    if (!fs.existsSync(dirPath)) return [];
+    return fs.readdirSync(dirPath)
+      .filter(f => fs.statSync(path.join(dirPath, f)).isFile())
+      .map(f => ({ fileName: f, name: f.replace(/\.(jar|zip|disabled)$/, '') }));
+  };
+
+  return {
+    mods: readDirSafe(path.join(inst.path, 'mods')),
+    resourcepacks: readDirSafe(path.join(inst.path, 'resourcepacks')),
+    shaders: readDirSafe(path.join(inst.path, 'shaderpacks'))
+  };
+});
+
+ipcMain.handle('open-instance-folder', async (event, { instanceId, contentType }) => {
+  const instances = getSavedInstances();
+  const inst = instances.find(i => i.id === instanceId);
+  if (!inst) return { success: false };
+
+  const targetDir = path.join(inst.path, contentType);
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+  shell.openPath(targetDir);
+  return { success: true };
+});
+
+ipcMain.handle('get-client-downloaded-items', async (event, contentType) => {
+  const clientInstance = getInstancePath('1.21.1', 'fabric');
+  let clientDir = clientInstance.modsDir;
+  if (contentType === 'resourcepacks') clientDir = clientInstance.resourcePacksDir;
+  if (contentType === 'shaderpacks') clientDir = clientInstance.shaderPacksDir;
+
+  if (!fs.existsSync(clientDir)) return [];
+
+  return fs.readdirSync(clientDir)
+    .filter(f => fs.statSync(path.join(clientDir, f)).isFile())
+    .map(f => ({
+      fileName: f,
+      name: f.replace(/\.(jar|zip|disabled)$/, '')
+    }));
+});
+
+ipcMain.handle('copy-client-items-to-instance', async (event, { instanceId, contentType, fileNames }) => {
+  const instances = getSavedInstances();
+  const inst = instances.find(i => i.id === instanceId);
+  if (!inst || !fileNames || !fileNames.length) return { success: false, message: 'Invalid instance or files.' };
+
+  const targetDir = path.join(inst.path, contentType);
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+  const clientInstance = getInstancePath('1.21.1', 'fabric');
+  let clientDir = clientInstance.modsDir;
+  if (contentType === 'resourcepacks') clientDir = clientInstance.resourcePacksDir;
+  if (contentType === 'shaderpacks') clientDir = clientInstance.shaderPacksDir;
+
+  for (const fileName of fileNames) {
+    const srcPath = path.join(clientDir, fileName);
+    const destPath = path.join(targetDir, fileName);
+    if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+
+  return { success: true };
+});
+
+ipcMain.handle('delete-instance-item', async (event, { instanceId, contentType, fileName }) => {
+  const instances = getSavedInstances();
+  const inst = instances.find(i => i.id === instanceId);
+  if (!inst) return { success: false };
+
+  const targetPath = path.join(inst.path, contentType, fileName);
+  if (fs.existsSync(targetPath)) {
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
+  return { success: true };
+});
+
+ipcMain.handle('delete-instance', async (event, instanceId) => {
+  let instances = getSavedInstances();
+  const inst = instances.find(i => i.id === instanceId);
+  if (inst && fs.existsSync(inst.path)) {
+    fs.rmSync(inst.path, { recursive: true, force: true });
+  }
+  instances = instances.filter(i => i.id !== instanceId);
+  saveInstancesIndex(instances);
+  return { success: true };
+});
+
+// --- GAME LAUNCH ROUTINE (VERSION, LOADER & CUSTOM INSTANCE SUPPORT) ---
 ipcMain.handle('get-mc-versions', async () => {
   try {
     const res = await axios.get('https://launchermeta.mojang.com/mc/game/version_manifest_v2.json', { timeout: 10000 });
@@ -690,6 +854,21 @@ ipcMain.handle('get-mc-versions', async () => {
   }
 });
 
+ipcMain.on('launch-instance', async (event, { instanceId, auth, ram }) => {
+  const instances = getSavedInstances();
+  const inst = instances.find(i => i.id === instanceId);
+  if (!inst) return;
+
+  ipcMain.emit('launch-game', event, {
+    version: inst.version,
+    modLoader: inst.loader,
+    auth: auth,
+    ram: ram,
+    customInstancePath: inst.path,
+    instanceName: inst.name
+  });
+});
+
 ipcMain.on('launch-game', async (event, config) => {
   const selectedVersion = (config && config.version && typeof config.version === 'string' && config.version.trim() !== '')
     ? config.version.trim()
@@ -697,7 +876,8 @@ ipcMain.on('launch-game', async (event, config) => {
   const selectedLoader = (config && config.modLoader) ? config.modLoader : 'fabric';
 
   const ramMax = config && config.ram ? `${config.ram}G` : "4000M";
-  const { instanceDir } = getInstancePath(selectedVersion, selectedLoader);
+  
+  let instanceDir = config && config.customInstancePath ? config.customInstancePath : getInstancePath(selectedVersion, selectedLoader).instanceDir;
 
   createTuxConsoleWindow();
   sendConsoleLog('info', `[TuxLauncher] Validating isolated instance files for Minecraft ${selectedVersion}...`);
@@ -896,43 +1076,6 @@ ipcMain.handle('get-installed-mods', async (event, { version = '1.21.1', loader 
     }));
 });
 
-ipcMain.handle('get-installed-folders', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods' } = {}) => {
-  const paths = getInstancePath(version, loader);
-  let targetDir = paths.modsDir;
-  if (type === 'resourcepacks') targetDir = paths.resourcePacksDir;
-  if (type === 'shaders') targetDir = paths.shaderPacksDir;
-
-  if (!fs.existsSync(targetDir)) return [];
-
-  return fs.readdirSync(targetDir)
-    .filter(f => {
-      const fullPath = path.join(targetDir, f);
-      return fs.statSync(fullPath).isDirectory();
-    })
-    .map(f => ({
-      fileName: f,
-      name: f,
-      isFolder: true
-    }));
-});
-
-ipcMain.handle('toggle-mod', async (event, { version = '1.21.1', loader = 'fabric', fileName, enable }) => {
-  const { modsDir } = getInstancePath(version, loader);
-  const cur = path.join(modsDir, fileName);
-  if (!fs.existsSync(cur)) return { success: false };
-
-  // Block folders from being toggled with disabled extension
-  if (fs.statSync(cur).isDirectory()) {
-    return { success: false, message: 'Cannot toggle directories.' };
-  }
-
-  const cleanName = fileName.replace(/(\.disabled)+$/, '');
-  const targetName = enable ? cleanName : cleanName + '.disabled';
-  
-  fs.renameSync(cur, path.join(modsDir, targetName));
-  return { success: true };
-});
-
 ipcMain.handle('delete-mod', async (event, { version = '1.21.1', loader = 'fabric', fileName }) => {
   const { modsDir } = getInstancePath(version, loader);
   const p = path.join(modsDir, fileName);
@@ -964,147 +1107,6 @@ ipcMain.handle('delete-pack', async (event, { version = '1.21.1', loader = 'fabr
   const targetDir = type === 'shaders' ? paths.shaderPacksDir : paths.resourcePacksDir;
   const p = path.join(targetDir, fileName);
   if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
-  return { success: true };
-});
-
-// --- SUBFOLDER NAVIGATION & MANAGEMENT HANDLERS ---
-ipcMain.handle('create-content-folder', async (event, { version, loader, type, folderName }) => {
-  try {
-    const paths = getInstancePath(version, loader);
-    let targetDir = paths.modsDir;
-    if (type === 'resourcepacks') targetDir = paths.resourcePacksDir;
-    if (type === 'shaders') targetDir = paths.shaderPacksDir;
-
-    const newFolderPath = path.join(targetDir, folderName);
-
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-
-    if (fs.existsSync(newFolderPath)) {
-      return { success: false, message: 'A folder with this name already exists.' };
-    }
-
-    fs.mkdirSync(newFolderPath, { recursive: true });
-    return { success: true };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-});
-
-ipcMain.handle('get-folder-contents', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName } = {}) => {
-  const paths = getInstancePath(version, loader);
-  let baseDir = paths.modsDir;
-  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
-  if (type === 'shaders') baseDir = paths.shaderPacksDir;
-
-  const targetDir = path.join(baseDir, folderName);
-  if (!fs.existsSync(targetDir)) return [];
-
-  return fs.readdirSync(targetDir).map(f => {
-    const fullPath = path.join(targetDir, f);
-    const isDir = fs.statSync(fullPath).isDirectory();
-    return {
-      fileName: f,
-      name: f,
-      enabled: isDir ? true : !f.endsWith('.disabled'),
-      isFolder: isDir,
-      relativePath: path.join(folderName, f)
-    };
-  });
-});
-
-ipcMain.handle('move-item-to-subfolder', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName, fileName }) => {
-  const paths = getInstancePath(version, loader);
-  let baseDir = paths.modsDir;
-  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
-  if (type === 'shaders') baseDir = paths.shaderPacksDir;
-
-  const srcPath = path.join(baseDir, fileName);
-  const destPath = path.join(baseDir, folderName, fileName);
-
-  if (!fs.existsSync(srcPath)) {
-    return { success: false, message: 'Source file not found.' };
-  }
-
-  try {
-    fs.renameSync(srcPath, destPath);
-    return { success: true };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-});
-
-ipcMain.handle('move-item-out-of-subfolder', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName, relativePath }) => {
-  try {
-    const paths = getInstancePath(version, loader);
-    let baseDir = paths.modsDir;
-    if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
-    if (type === 'shaders') baseDir = paths.shaderPacksDir;
-
-    // Fully resolve paths and handle subfolder separation safely
-    const cleanRelativePath = relativePath.startsWith(folderName + path.sep) 
-      ? relativePath.substring(folderName.length + path.sep.length) 
-      : relativePath;
-
-    const sourcePath = path.join(baseDir, folderName, cleanRelativePath);
-    const fileName = path.basename(cleanRelativePath);
-    const destPath = path.join(baseDir, fileName);
-
-    if (fs.existsSync(sourcePath)) {
-      if (fs.existsSync(destPath)) {
-        fs.unlinkSync(destPath);
-      }
-      fs.renameSync(sourcePath, destPath);
-      return { success: true };
-    }
-    return { success: false, message: 'Source file not found.' };
-  } catch (err) {
-    console.error("Error moving item out of subfolder:", err);
-    return { success: false, message: err.message };
-  }
-});
-
-ipcMain.handle('add-file-to-folder', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', folderName }) => {
-  const paths = getInstancePath(version, loader);
-  let baseDir = paths.modsDir;
-  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
-  if (type === 'shaders') baseDir = paths.shaderPacksDir;
-
-  const targetDir = path.join(baseDir, folderName);
-  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile', 'multiSelections'],
-    filters: [
-      { name: 'Minecraft Content', extensions: ['jar', 'zip'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  });
-
-  if (result.canceled || !result.filePaths.length) {
-    return { success: false, message: 'Cancelled' };
-  }
-
-  for (const filePath of result.filePaths) {
-    const fileName = path.basename(filePath);
-    const destPath = path.join(targetDir, fileName);
-    fs.copyFileSync(filePath, destPath);
-  }
-
-  return { success: true };
-});
-
-ipcMain.handle('delete-folder-item', async (event, { version = '1.21.1', loader = 'fabric', type = 'mods', relativePath }) => {
-  const paths = getInstancePath(version, loader);
-  let baseDir = paths.modsDir;
-  if (type === 'resourcepacks') baseDir = paths.resourcePacksDir;
-  if (type === 'shaders') baseDir = paths.shaderPacksDir;
-
-  const targetPath = path.join(baseDir, relativePath);
-  if (fs.existsSync(targetPath)) {
-    fs.rmSync(targetPath, { recursive: true, force: true });
-  }
   return { success: true };
 });
 
