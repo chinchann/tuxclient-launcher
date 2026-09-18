@@ -25,6 +25,19 @@
       font-size: 11px;
       font-weight: 600;
     }
+    /* Unread Badge Styling */
+    .unread-badge {
+      background: #A855F7;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 10px;
+      min-width: 18px;
+      text-align: center;
+      display: inline-block;
+      box-shadow: 0 2px 6px rgba(168, 85, 247, 0.4);
+    }
     .chat-date-divider {
       text-align: center;
       color: #9CA3AF;
@@ -329,7 +342,13 @@
           </div>
 
           <div class="settings-card">
-            <h3>My Friends</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <h3 style="margin: 0;">My Friends</h3>
+            </div>
+            <!-- Added Friends Search Bar -->
+            <div class="mod-search-bar" style="margin-bottom: 12px; margin-top: 5px;">
+              <input type="text" id="friends-search-input" placeholder="Search friends list..." onkeyup="filterFriendsList()">
+            </div>
             <div id="friends-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
               <p class="subtext">Sign in to see your friends.</p>
             </div>
@@ -402,23 +421,23 @@
                 <div class="version-filters">
                   <label><input type="checkbox" id="show-snapshots"> Snapshots</label>
                   <label><input type="checkbox" id="show-historical"> Alpha/Beta</label>
-                </div>
               </div>
-              <select id="version-select">
-                <option value="">Loading versions...</option>
-              </select>
             </div>
+            <select id="version-select">
+              <option value="">Loading versions...</option>
+            </select>
+          </div>
 
-            <div class="option-group">
-              <label style="margin-bottom: 6px; display: block;">MOD LOADER</label>
-              <select id="loader-select">
-                <option value="vanilla">Vanilla</option>
-                <option value="fabric" selected>Fabric</option>
-                <option value="quilt">Quilt</option>
-                <option value="forge">Forge</option>
-                <option value="neoforge">NeoForge</option>
-              </select>
-            </div>
+          <div class="option-group">
+            <label style="margin-bottom: 6px; display: block;">MOD LOADER</label>
+            <select id="loader-select">
+              <option value="vanilla">Vanilla</option>
+              <option value="fabric" selected>Fabric</option>
+              <option value="quilt">Quilt</option>
+              <option value="forge">Forge</option>
+              <option value="neoforge">NeoForge</option>
+            </select>
+          </div>
           </div>
           
           <button id="play-btn" disabled>Launch Game</button>
@@ -756,7 +775,7 @@
       </div>
 
       <div id="status-text">Status: Ready</div>
-    </div>
+  </div>
   </footer>
 
   <script>
@@ -1189,14 +1208,9 @@
     showTuxToast(`Added offline account: ${cleanName}`);
   }
 
-  // --- ACCOUNT-SCOPED LOCAL CACHE & MANUAL CASING OVERRIDE MAP ---
+  // --- ACCOUNT-SCOPED LOCAL CACHE & MOJANG API CASING RESOLUTION ---
   const CACHE_KEY_LASTSEEN = 'tux_cached_last_seen';
 
-  const MANUAL_CASING_OVERRIDES = {
-    "_graptor_": "_Graptor_"
-  };
-
-  // UPDATED: Account-scoped cache key to keep friend lists isolated per user account
   function getActiveAccountCacheKey() {
     const activeUser = currentUsername || (activeAccount ? activeAccount.name : 'guest');
     return `tux_cached_friends_${activeUser.toLowerCase().trim()}`;
@@ -1205,20 +1219,6 @@
   async function resolveCorrectCasing(username) {
     if (!username) return username;
     const clean = username.trim();
-    const lowerKey = clean.toLowerCase();
-
-    if (MANUAL_CASING_OVERRIDES[lowerKey]) {
-      return MANUAL_CASING_OVERRIDES[lowerKey];
-    }
-
-    const cachedFriends = loadFriendsFromLocalCache();
-    const found = cachedFriends.find(f => {
-      const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
-      return fName && fName.toLowerCase() === lowerKey;
-    });
-    if (found && typeof found === 'object' && (found.pristineName || found.username)) {
-      return found.pristineName || found.username;
-    }
 
     try {
       const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(clean)}`);
@@ -1229,6 +1229,15 @@
         }
       }
     } catch (err) {}
+
+    const cachedFriends = loadFriendsFromLocalCache();
+    const found = cachedFriends.find(f => {
+      const fName = typeof f === 'string' ? f : (f.username || f.name || f.pristineName);
+      return fName && fName.toLowerCase() === clean.toLowerCase();
+    });
+    if (found && typeof found === 'object' && (found.pristineName || found.username)) {
+      return found.pristineName || found.username;
+    }
 
     return clean;
   }
@@ -1242,7 +1251,7 @@
         if (rawName) {
           const cleanName = rawName.trim();
           const lower = cleanName.toLowerCase();
-          const pristine = MANUAL_CASING_OVERRIDES[lower] || f.pristineName || cleanName;
+          const pristine = f.pristineName || cleanName;
           const friendObj = typeof f === 'string' ? { username: cleanName, pristineName: pristine } : { ...f, username: cleanName, pristineName: pristine };
           map[lower] = friendObj;
         }
@@ -1273,8 +1282,7 @@
       const map = JSON.parse(raw);
       const cleanName = username.trim();
       const lower = cleanName.toLowerCase();
-      const pristine = MANUAL_CASING_OVERRIDES[lower] || cleanName;
-      map[lower] = { pristineName: pristine, timestamp };
+      map[lower] = { pristineName: cleanName, timestamp };
       localStorage.setItem(CACHE_KEY_LASTSEEN, JSON.stringify(map));
     } catch (err) {
       console.error("[Cache] Failed to save last seen timestamp:", err);
@@ -1297,7 +1305,6 @@
   window.addEventListener('beforeunload', (e) => {
     const activeUser = currentUsername || (activeAccount ? activeAccount.name : null);
     if (activeUser) {
-      console.log("[Lifecycle] Application closing. Saving final states and notifying backend...");
       saveLastSeenToLocalCache(activeUser, Date.now());
       try {
         ipcRenderer.send('app-shutdown-cleanup', { username: activeUser });
@@ -1397,8 +1404,15 @@
     }
   };
 
-  document.getElementById('version-select')?.addEventListener('change', refreshActiveTabContent);
-  document.getElementById('loader-select')?.addEventListener('change', refreshActiveTabContent);
+  document.getElementById('version-select')?.addEventListener('change', (e) => {
+    localStorage.setItem('tux_last_version', e.target.value);
+    refreshActiveTabContent();
+  });
+
+  document.getElementById('loader-select')?.addEventListener('change', (e) => {
+    localStorage.setItem('tux_last_loader', e.target.value);
+    refreshActiveTabContent();
+  });
 
   function formatTime(timestamp) {
     const date = new Date(timestamp || Date.now());
@@ -1475,6 +1489,7 @@
   let currentFriendsList = new Set();
   let mutedFriends = new Set();
   let activeContextTarget = null;
+  let unreadMessagesCount = {};
 
   const contextMenu = document.getElementById('friend-context-menu');
   const muteBtn = document.getElementById('ctx-mute-btn');
@@ -1642,6 +1657,9 @@
     currentActivePrivateFriend = friendUsername;
     chatPanel?.classList.add('hidden');
     
+    unreadMessagesCount[friendUsername] = 0;
+    updateUnreadBadgeUI(friendUsername);
+
     const titleEl = document.getElementById('private-chat-title');
     if (titleEl) titleEl.innerText = `Chat with ${friendUsername}`;
 
@@ -1659,6 +1677,28 @@
     }
   };
 
+  function updateUnreadBadgeUI(username) {
+    const card = document.querySelector(`.friend-card-item[data-username="${CSS.escape(username)}"]`);
+    if (!card) return;
+
+    const count = unreadMessagesCount[username] || 0;
+    let badge = card.querySelector('.unread-badge');
+
+    if (count > 0) {
+      if (!badge) {
+        const rightContainer = card.querySelector('.friend-card-right');
+        if (rightContainer) {
+          badge = document.createElement('span');
+          badge.className = 'unread-badge';
+          rightContainer.prepend(badge);
+        }
+      }
+      if (badge) badge.innerText = count;
+    } else {
+      if (badge) badge.remove();
+    }
+  }
+
   async function initBackendNetwork() {
     const friendsContainer = document.getElementById('friends-list-container');
     const requestsContainer = document.getElementById('friend-requests-list');
@@ -1671,7 +1711,6 @@
 
     const activeUser = currentUsername || activeAccount.name;
     
-    // Show connecting feedback and initialize connection
     if (friendsContainer && friendsContainer.children.length === 0) {
       friendsContainer.innerHTML = '<p class="subtext">Connecting to backend...</p>';
     }
@@ -1703,14 +1742,16 @@
     const isOnlineFlag = typeof friendData === 'object' ? friendData.isOnline : undefined;
     const isOfflineAccountType = typeof friendData === 'object' && friendData.type === 'offline';
     
-    const session = typeof friendData === 'object' ? friendData.session : null;
-    const isHosting = session && session.serverIp;
-    const startTime = session?.startTime || null;
+    // Comprehensive fallback checks across all possible backend packet structures
+    const session = (typeof friendData === 'object') ? (friendData.session || friendData.gameSession || friendData.presence || friendData) : null;
+    const targetServer = session?.serverIp || session?.server || session?.address || session?.ip;
+    const isHosting = Boolean(targetServer || session?.gameVersion || session?.version || ['playing', 'hosting', 'in-game'].includes(rawStatus.toLowerCase()));
+    const startTime = session?.startTime || session?.time || session?.startedAt || session?.timestamp || null;
 
     let isOnline = false;
-    if (isOnlineFlag === true || isOnlineFlag === 'true') {
+    if (isOnlineFlag === true || isOnlineFlag === 'true' || isHosting) {
       isOnline = true;
-    } else if (['online', 'playing', 'hosting', 'active'].includes(rawStatus.toLowerCase()) || isHosting || typeof friendData === 'string') {
+    } else if (['online', 'playing', 'hosting', 'active'].includes(rawStatus.toLowerCase()) || typeof friendData === 'string') {
       isOnline = true;
     }
 
@@ -1725,14 +1766,17 @@
     let statusClass = isOnline ? 'status-online' : 'status-offline';
     let statusTextLabel = isOnline ? (isOfflineAccountType ? 'Online (Offline Account)' : 'Online') : formatOfflineDuration(lastSeen, friendUsername);
 
-    if (isHosting || ['playing', 'hosting'].includes(rawStatus.toLowerCase())) {
+    if (isHosting) {
       statusClass = 'status-playing';
-      const hostLabel = (session && session.serverIp)
-        ? (session.serverIp.startsWith('LAN') ? 'Playing Singleplayer / LAN' : `Playing on ${session.serverIp}`)
+      const hostLabel = targetServer
+        ? (String(targetServer).toLowerCase().includes('lan') || String(targetServer).startsWith('127.') || String(targetServer).startsWith('localhost') ? 'Playing Singleplayer / LAN' : `Playing on ${targetServer}`)
         : 'Playing Minecraft';
 
-      const versionStr = session?.gameVersion ? `MC ${session.gameVersion}` : '';
-      const loaderStr = session?.modLoader ? `(${session.modLoader.charAt(0).toUpperCase() + session.modLoader.slice(1)})` : '';
+      const resolvedVersion = session?.gameVersion || session?.version;
+      const resolvedLoader = session?.modLoader || session?.loader;
+
+      const versionStr = resolvedVersion ? `MC ${resolvedVersion}` : '';
+      const loaderStr = resolvedLoader ? `(${String(resolvedLoader).charAt(0).toUpperCase() + String(resolvedLoader).slice(1)})` : '';
       const detailsStr = [versionStr, loaderStr].filter(Boolean).join(' ');
 
       statusTextLabel = detailsStr ? `${hostLabel} · ${detailsStr}` : hostLabel;
@@ -1747,6 +1791,8 @@
         card.remove();
       }
     });
+
+    const unreadCount = unreadMessagesCount[friendUsername] || 0;
 
     const friendCard = document.createElement('div');
     friendCard.className = 'friend-card-item';
@@ -1770,12 +1816,14 @@
           <span class="friend-status-text ${statusClass}">${statusTextLabel}</span>
         </div>
       </div>
-      <div class="friend-card-right">
+      <div class="friend-card-right" style="display: flex; align-items: center; gap: 8px;">
+        ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
         <button class="secondary-btn chat-btn" onclick="openDirectChat('${friendUsername}')">Message</button>
       </div>
     `;
 
     friendsContainer.appendChild(friendCard);
+    filterFriendsList();
 
     if (startTime) {
       if (activeOfflineTimers[friendUsername]) {
@@ -1787,6 +1835,7 @@
         const timerEl = document.querySelector(`.friend-card-item[data-username="${CSS.escape(friendUsername)}"] .session-timer`);
         if (timerEl) {
           timerEl.innerText = formatSessionDuration(startTime);
+          timerEl.classList.remove('hidden');
         } else {
           clearInterval(activeFriendTimers[friendUsername]);
         }
@@ -1809,6 +1858,23 @@
       }
     }
   }
+
+  // --- FRIENDS LIST SEARCH FILTER FUNCTION ---
+  window.filterFriendsList = () => {
+    const query = document.getElementById('friends-search-input')?.value.toLowerCase().trim() || '';
+    const container = document.getElementById('friends-list-container');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.friend-card-item');
+    cards.forEach(card => {
+      const username = card.getAttribute('data-username')?.toLowerCase() || '';
+      if (username.includes(query)) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  };
 
   ipcRenderer.on('update-available-prompt', (event, version) => {
     const modal = document.getElementById('update-modal');
@@ -1857,6 +1923,36 @@
     modal.classList.remove('hidden');
   });
 
+  ipcRenderer.on('sync_pending_requests', async (event, requests) => {
+    if (!requests || !Array.isArray(requests)) return;
+    const requestsList = document.getElementById('friend-requests-list');
+    if (!requestsList) return;
+
+    if (requestsList.querySelector('.subtext')) requestsList.innerHTML = '';
+
+    for (const req of requests) {
+      const resolvedFrom = await resolveCorrectCasing(req.from);
+      const reqCard = document.createElement('div');
+      reqCard.className = 'setting-row';
+      reqCard.style.cssText = 'background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; width: 100%;';
+      reqCard.innerHTML = `
+        <div class="profile-info" style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <img src="https://crafthead.net/avatar/${encodeURIComponent(resolvedFrom)}/32" width="32" height="32" style="border-radius: 4px; flex-shrink: 0;" onerror="this.src='https://crafatar.com/avatars/steve?size=32&default=MSTEVE'">
+          <div class="setting-info" style="min-width: 0;">
+            <label style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>${resolvedFrom}</strong></label>
+            <span class="subtext">Wants to be your friend</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+          <button class="download-btn" onclick="respondFriendRequest('${resolvedFrom}', 'accept', this)">Accept</button>
+          <button class="secondary-btn close-btn-style" onclick="respondFriendRequest('${resolvedFrom}', 'decline', this)">Decline</button>
+        </div>
+      `;
+      requestsList.appendChild(reqCard);
+      showTuxToast(`Received a friend request from ${resolvedFrom} while offline!`);
+    }
+  });
+
   ipcRenderer.on('network-packet', async (event, packet) => {
     if (packet.type === 'duplicate_session' || packet.error === 'duplicate_session' || packet.code === 4001) {
       handleDuplicateSession();
@@ -1872,7 +1968,7 @@
         for (const f of packet.friends) {
           const name = f.username || f.name;
           const statusStr = (f.status || '').toLowerCase();
-          const online = ['online', 'playing', 'hosting'].includes(statusStr) || f.isOnline === true;
+          const online = ['online', 'playing', 'hosting'].includes(statusStr) || f.isOnline === true || f.session;
           if (online) {
             saveLastSeenToLocalCache(name, null);
             f.lastSeen = null;
@@ -1967,7 +2063,7 @@
           username: incomingUser,
           status: finalStatus,
           lastSeen: finalLastSeen,
-          session: packet.session,
+          session: packet.session || packet.gameSession || packet.presence,
           isOnline: packet.isOnline,
           type: packet.type
         });
@@ -2061,6 +2157,11 @@
       if (!activeChatHistory[resolvedFrom]) activeChatHistory[resolvedFrom] = [];
       activeChatHistory[resolvedFrom].push({ sender: resolvedFrom, text: packet.text, timestamp: ts });
 
+      if (currentActivePrivateFriend !== resolvedFrom || privateChatPanel?.classList.contains('hidden')) {
+        unreadMessagesCount[resolvedFrom] = (unreadMessagesCount[resolvedFrom] || 0) + 1;
+        updateUnreadBadgeUI(resolvedFrom);
+      }
+
       if (!mutedFriends.has(resolvedFrom)) {
         if (!currentActivePrivateFriend || currentActivePrivateFriend !== resolvedFrom || privateChatPanel?.classList.contains('hidden')) {
           showDesktopNotification(
@@ -2081,6 +2182,7 @@
 
   window.sendFriendRequest = async () => {
     const input = document.getElementById('add-friend-input');
+    const sendBtn = document.getElementById('send-friend-request-btn');
     const targetUsername = input ? input.value.trim() : '';
     const senderUsername = currentUsername || (activeAccount ? activeAccount.name : '');
 
@@ -2107,16 +2209,29 @@
       return;
     }
 
-    const result = await ipcRenderer.invoke('send-friend-request', {
-      targetUsername: targetUsername,
-      senderUsername: senderUsername
-    });
+    // Disable button to prevent spamming
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.innerText = "Sending...";
+    }
 
-    if (result && result.success !== false) {
-      showTuxToast(`Friend request sent to ${targetUsername}!`);
-      if (input) input.value = '';
-    } else {
-      showTuxAlert('Error', `Error: ${result?.message || 'Failed to send request.'}`);
+    try {
+      const result = await ipcRenderer.invoke('send-friend-request', {
+        targetUsername: targetUsername,
+        senderUsername: senderUsername
+      });
+
+      if (result && result.success !== false) {
+        showTuxToast(`Friend request sent to ${targetUsername}!`);
+        if (input) input.value = '';
+      } else {
+        showTuxAlert('Error', `Error: ${result?.message || 'Failed to send request.'}`);
+      }
+    } finally {
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.innerText = "Send Request";
+      }
     }
   };
 
@@ -2206,6 +2321,7 @@
 
   async function initializeVersions() {
     const versionSelect = document.getElementById('version-select');
+    const loaderSelect = document.getElementById('loader-select');
     if (!versionSelect) return;
 
     try {
@@ -2235,6 +2351,18 @@
           versionSelect.appendChild(opt);
         }
       });
+
+      // --- RESTORE LAST SAVED VERSION & LOADER ---
+      const savedVersion = localStorage.getItem('tux_last_version');
+      if (savedVersion && [...versionSelect.options].some(o => o.value === savedVersion)) {
+        versionSelect.value = savedVersion;
+      }
+
+      const savedLoader = localStorage.getItem('tux_last_loader');
+      if (loaderSelect && savedLoader) {
+        loaderSelect.value = savedLoader;
+      }
+
     } catch (err) {
       versionSelect.innerHTML = '<option value="">Error fetching list</option>';
     }

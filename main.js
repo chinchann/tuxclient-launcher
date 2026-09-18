@@ -571,6 +571,13 @@ function connectGlobalChat(username) {
         return;
       }
 
+      // Automatically forward synced pending requests to UI renderer process
+      if (packet.type === 'sync_pending_requests') {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('sync_pending_requests', packet.requests);
+        }
+      }
+
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('network-packet', packet);
       }
@@ -1091,7 +1098,7 @@ ipcMain.on('launch-game', async (event, config) => {
 
     launcher.removeAllListeners();
 
-    let sessionStartTime = null;
+    let gameSessionStartTime = null;
 
     launcher.on('data', (e) => {
       const str = e ? e.toString().trim() : '';
@@ -1104,7 +1111,7 @@ ipcMain.on('launch-game', async (event, config) => {
       if (connectMatch && connectMatch[1]) {
         const rawIp = connectMatch[1].replace(/,/g, '');
 
-        if (!sessionStartTime) sessionStartTime = Date.now();
+        if (!gameSessionStartTime) gameSessionStartTime = Date.now();
 
         if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
           const presencePayload = {
@@ -1115,7 +1122,7 @@ ipcMain.on('launch-game', async (event, config) => {
               serverIp: rawIp,
               gameVersion: selectedVersion,
               modLoader: selectedLoader,
-              startTime: sessionStartTime
+              startTime: gameSessionStartTime
             }
           };
 
@@ -1128,7 +1135,7 @@ ipcMain.on('launch-game', async (event, config) => {
       }
 
       if (str.includes('Starting integrated minecraft server') || str.includes('Loaded 0 recipes') || str.includes('Saving chunks for level')) {
-        if (!sessionStartTime) sessionStartTime = Date.now();
+        if (!gameSessionStartTime) gameSessionStartTime = Date.now();
 
         if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
           const singleplayerPayload = {
@@ -1139,7 +1146,7 @@ ipcMain.on('launch-game', async (event, config) => {
               serverIp: 'LAN / Singleplayer',
               gameVersion: selectedVersion,
               modLoader: selectedLoader,
-              startTime: sessionStartTime
+              startTime: gameSessionStartTime
             }
           };
 
@@ -1186,7 +1193,7 @@ ipcMain.on('launch-game', async (event, config) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('launch-status', code === 0 ? 'Ready' : `Crashed (Exit code: ${code})`);
       setLauncherActivity('In Launcher', 'Browsing Mods & Profiles');
 
-      sessionStartTime = null;
+      gameSessionStartTime = null;
 
       if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
         const resetPayload = {
