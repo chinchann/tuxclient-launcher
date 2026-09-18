@@ -460,6 +460,7 @@ let pingInterval = null;
 let pongTimeout = null;
 let reconnectAttempts = 0;
 let isExplicitlyLoggingOut = false;
+let socketConnectionId = 0; // Guard against race conditions and duplicate overlapping connections
 
 function connectGlobalChat(username) {
   if (!username) return;
@@ -467,11 +468,30 @@ function connectGlobalChat(username) {
   currentActiveUsername = username.trim();
   isExplicitlyLoggingOut = false;
 
+  // Increment connection token to invalidate any pending/active connection routines
+  const currentConnectionId = ++socketConnectionId;
+
+  // Safely close existing socket only if it is fully open; bypass if still connecting
   if (globalChatSocket) {
-    try { globalChatSocket.close(); } catch {}
+    try {
+      globalChatSocket.removeAllListeners();
+      if (globalChatSocket.readyState === WebSocket.OPEN) {
+        globalChatSocket.close();
+      } else {
+        globalChatSocket.onclose = null;
+        globalChatSocket.onerror = null;
+      }
+    } catch (e) {}
+    globalChatSocket = null;
   }
-  if (pingInterval) clearInterval(pingInterval);
-  if (pongTimeout) clearTimeout(pongTimeout);
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
+  }
+  if (pongTimeout) {
+    clearTimeout(pongTimeout);
+    pongTimeout = null;
+  }
 
   // Check if current active account is offline to pass type flag to backend
   const savedAccs = JSON.parse(safeLocalStorageGet('tux_accounts') || '[]');
@@ -481,9 +501,22 @@ function connectGlobalChat(username) {
   const connectionUrl = `${SERVER_WS_URL}?user=${encodeURIComponent(normalizedUsername)}&type=${isOfflineAcc ? 'offline' : 'microsoft'}`;
   console.log(`[TuxSocket] Connecting to backend: ${connectionUrl}`);
   
-  globalChatSocket = new WebSocket(connectionUrl);
+  let ws;
+  try {
+    ws = new WebSocket(connectionUrl);
+  } catch (err) {
+    console.error('[TuxSocket] Failed to construct WebSocket:', err.message);
+    return;
+  }
+  globalChatSocket = ws;
 
-  globalChatSocket.on('open', () => {
+  ws.on('open', () => {
+    // If a newer connection request was triggered while this one was connecting, abort this one
+    if (socketConnectionId !== currentConnectionId || globalChatSocket !== ws) {
+      try { ws.close(); } catch (e) {}
+      return;
+    }
+
     console.log('[TuxSocket] Connected successfully!');
     reconnectAttempts = 0; // Reset backoff counter on successful handshake
 
@@ -497,7 +530,7 @@ function connectGlobalChat(username) {
       uuid: normalizedUsername,
       accountType: isOfflineAcc ? 'offline' : 'microsoft'
     };
-    globalChatSocket.send(JSON.stringify(authPacket));
+    ws.send(JSON.stringify(authPacket));
 
     const initialPresence = {
       type: 'presence_update',
@@ -506,27 +539,31 @@ function connectGlobalChat(username) {
       accountType: isOfflineAcc ? 'offline' : 'microsoft',
       session: null
     };
-    globalChatSocket.send(JSON.stringify(initialPresence));
-    globalChatSocket.send(JSON.stringify({ ...initialPresence, type: 'user_status_change' }));
+    ws.send(JSON.stringify(initialPresence));
+    ws.send(JSON.stringify({ ...initialPresence, type: 'user_status_change' }));
 
     // Heartbeat: Ping every 30 seconds
     pingInterval = setInterval(() => {
-      if (globalChatSocket && globalChatSocket.readyState === WebSocket.OPEN) {
-        globalChatSocket.send(JSON.stringify({ type: 'ping' }));
+      if (globalChatSocket === ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
 
         // Watchdog: Force reconnect if pong is not received within 15 seconds
         if (pongTimeout) clearTimeout(pongTimeout);
         pongTimeout = setTimeout(() => {
-          console.warn('[TuxSocket Warning] Pong timeout reached! Forcing socket reconnect...');
-          if (globalChatSocket) {
-            try { globalChatSocket.terminate ? globalChatSocket.terminate() : globalChatSocket.close(); } catch {}
+          if (globalChatSocket === ws) {
+            console.warn('[TuxSocket Warning] Pong timeout reached! Forcing socket reconnect...');
+            try {
+              if (typeof ws.terminate === 'function') ws.terminate();
+              else ws.close();
+            } catch {}
           }
         }, 15000);
       }
     }, 30000);
   });
 
-  globalChatSocket.on('message', (data) => {
+  ws.on('message', (data) => {
+    if (socketConnectionId !== currentConnectionId || globalChatSocket !== ws) return;
     try {
       const packet = JSON.parse(data.toString());
       if (packet.type === 'pong') {
@@ -540,9 +577,21 @@ function connectGlobalChat(username) {
     } catch (err) {}
   });
 
-  globalChatSocket.on('close', () => {
-    if (pingInterval) clearInterval(pingInterval);
-    if (pongTimeout) clearTimeout(pongTimeout);
+  ws.on('close', () => {
+    if (socketConnectionId !== currentConnectionId || globalChatSocket !== ws) return;
+
+    if (pingInterval) {
+      clearInterval(pingInterval);
+      pingInterval = null;
+    }
+    if (pongTimeout) {
+      clearTimeout(pongTimeout);
+      pongTimeout = null;
+    }
+
+    if (globalChatSocket === ws) {
+      globalChatSocket = null;
+    }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('network-status', { connected: false });
@@ -554,14 +603,15 @@ function connectGlobalChat(username) {
       console.log(`[TuxSocket] Connection closed. Reconnecting in ${Math.round(backoffDelay / 1000)}s (Attempt ${reconnectAttempts})...`);
       
       setTimeout(() => {
-        if (currentActiveUsername && !isExplicitlyLoggingOut) {
+        if (currentActiveUsername && !isExplicitlyLoggingOut && socketConnectionId === currentConnectionId) {
           connectGlobalChat(currentActiveUsername);
         }
       }, backoffDelay);
     }
   });
 
-  globalChatSocket.on('error', (err) => {
+  ws.on('error', (err) => {
+    if (socketConnectionId !== currentConnectionId || globalChatSocket !== ws) return;
     console.error('[TuxSocket Error]:', err.message);
   });
 }

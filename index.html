@@ -227,7 +227,6 @@
                 </div>
               </div>
               <div style="display: flex; gap: 8px;">
-                <!-- Updated button to purple theme (#A855F7) -->
                 <button class="download-btn" style="padding: 6px 14px; font-size: 12px; background: #A855F7; color: #fff;" onclick="launchActiveInstance()">▶ Join / Launch</button>
               </div>
             </div>
@@ -771,7 +770,6 @@
     }
   }
 
-  // Listen to storage changes to catch when another window/tab is opened or writes the active session
   window.addEventListener('storage', (event) => {
     if (event.key === 'tux_active_account' && event.newValue) {
       handleDuplicateSession();
@@ -911,7 +909,6 @@
           <button class="delete-icon-btn" onclick="deleteInstance('${inst.id}')" title="Delete Instance">🗑️</button>
         </div>
         <div class="instance-card-actions">
-          <!-- Changed background to purple theme (#A855F7) -->
           <button class="instance-action-launch" style="background: #A855F7; color: #fff;" onclick="joinInstance('${inst.id}')">▶ Launch</button>
           <button class="instance-action-manage" onclick="manageInstance('${inst.id}', '${inst.name.replace(/'/g, "\\'")}', '${inst.version}', '${inst.loader}')">Manage</button>
         </div>
@@ -1199,8 +1196,10 @@
     "_graptor_": "_Graptor_"
   };
 
+  // UPDATED: Account-scoped cache key to keep friend lists isolated per user account
   function getActiveAccountCacheKey() {
-    return `tux_cached_friends_shared_global`;
+    const activeUser = currentUsername || (activeAccount ? activeAccount.name : 'guest');
+    return `tux_cached_friends_${activeUser.toLowerCase().trim()}`;
   }
 
   async function resolveCorrectCasing(username) {
@@ -1671,6 +1670,12 @@
     }
 
     const activeUser = currentUsername || activeAccount.name;
+    
+    // Show connecting feedback and initialize connection
+    if (friendsContainer && friendsContainer.children.length === 0) {
+      friendsContainer.innerHTML = '<p class="subtext">Connecting to backend...</p>';
+    }
+
     await ipcRenderer.invoke('init-global-chat', activeUser);
   }
 
@@ -1853,7 +1858,6 @@
   });
 
   ipcRenderer.on('network-packet', async (event, packet) => {
-    // Check if the server sent a duplicate session/connection error packet
     if (packet.type === 'duplicate_session' || packet.error === 'duplicate_session' || packet.code === 4001) {
       handleDuplicateSession();
       return;
@@ -2384,6 +2388,7 @@
     localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
     localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
     updateAccountUI();
+    initBackendNetwork();
   });
 
   ipcRenderer.on('login-error', (event, errorMessage) => {
@@ -2394,6 +2399,7 @@
     activeAccount = null;
     localStorage.removeItem('tux_active_account');
     updateAccountUI();
+    initBackendNetwork();
   });
 
   window.selectAccount = (uuid) => {
@@ -2402,6 +2408,7 @@
       activeAccount = acc;
       localStorage.setItem('tux_active_account', JSON.stringify(activeAccount));
       updateAccountUI();
+      initBackendNetwork();
     }
   };
 
@@ -2414,6 +2421,7 @@
     }
     localStorage.setItem('tux_accounts', JSON.stringify(savedAccounts));
     updateAccountUI();
+    initBackendNetwork();
   };
 
   playBtn?.addEventListener('click', async () => {
